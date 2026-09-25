@@ -188,3 +188,47 @@ CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN ... ELSE NULL END AS ERR
 
 
 
+de ahi cuando analice el auput de los match:
+
+
+
+0% de match — esto no es un problema menor, es una alarma que invalida el enfoque de crédito-por-crédito que armamos, y tengo que corregir algo que dije en el turno anterior.
+
+Tengo que retractarme de una conclusión
+
+Dije que el bug #3 (SALDO_ACTUAL - MONTO_DESEMBOLSADO sin restar SALDO_ANTERIOR) resultó "inofensivo" porque ERROR_RECONCILIACION salía en 0 en las 89 filas. Mi explicación fue: "ningún crédito recibe un desembolso mientras ya tenía saldo". Con este resultado de 0% de match, esa explicación es incorrecta. La razón real es mucho más grave:
+
+ACCOUNT_NUMBER (en FEM_SALDOS_DIARIOS) y NROCREDITO (en DESEMBOLSOS_PPE_BUK_TDT) casi seguro tampoco coinciden entre sí — igual que no coincide contra DOCUM_APL_ID. Eso significa que el join a nivel de crédito que armé en la query de movimientos nunca está encontrando el crédito correcto. El ERROR_RECONCILIACION=0 no es evidencia de que la clasificación esté bien: es porque el álgebra siempre cierra sin importar en qué balde cae cada dólar (mientras nada se pierda ni se duplique en el total).
+
+Qué está pasando en realidad con tus números
+
+Cuando el join falla, cada crédito nuevo genera dos filas que no se reconocen entre sí:
+
+Una fila "fantasma" del lado de desembolsos (con NRO_CREDITO = NROCREDITO), que reporta NUEVOS = +monto correctamente (porque ese valor sale directo de la tabla de desembolsos, sin necesitar el join).
+Una fila real del lado del stock (con NRO_CREDITO = ACCOUNT_NUMBER), donde aparece el saldo real nuevo, pero como nunca encuentra el desembolso que lo explique, cae en SALDO_ACTUAL <> 0 → AMORTIZACION = +saldo_actual.
+
+Esto explica exactamente esos valores positivos de AMORTIZACION que ya habíamos visto y que no supimos explicar del todo (19-mayo: +5.5M, 22-mayo: +3.2M, etc.) — no son incrementos misteriosos aislados, son créditos nuevos mal etiquetados como amortización, en todo el histórico, no solo después del 17-sep. FUGA no debería estar tan afectada (su lógica no depende de encontrar un desembolso), pero AMORTIZACION sí está estructuralmente contaminada.
+
+Por qué no voy a intentar parchar esto
+
+Podría intentar ajustar la normalización de IDs otra vez, pero un 0% exacto sobre 159,053 créditos no es un problema de formato (ceros a la izquierda, espacios, etc.) — si fuera eso, veríamos algún porcentaje de coincidencia, no cero absoluto. Esto sugiere que ACCOUNT_NUMBER y DOCUM_APL_ID son sistemas de identificación distintos por diseño (por ejemplo, número de cuenta del core bancario vs. ID de aplicación/crédito de originación). Seguir ajustando el join sin saber esto sería adivinar.
+
+Recomendación concreta
+
+No construyas la v2 con clasificación a nivel de crédito todavía. En su lugar:
+
+Pregúntale a Bryan o al equipo de datos si existe una tabla puente (CIF_KEY + NROCREDITO ↔ ACCOUNT_NUMBER) o si FEM_SALDOS_DIARIOS tiene alguna otra columna (por ejemplo, un DOCUM_APL_ID que no estemos usando) que sí corresponda a NROCREDITO. Pídele que corra esto para confirmar si esa columna existe:
+sql
+   SELECT column_name FROM ALL_TAB_COLUMNS
+   WHERE table_name = 'FEM_SALDOS_DIARIOS' AND owner = 'FDM'
+   ORDER BY column_name;
+
+Si aparece DOCUM_APL_ID (o algo equivalente), repite la validación de match usando esa columna en vez de ACCOUNT_NUMBER.
+
+Mientras tanto, no uses la versión con AMORTIZACION/FUGA separadas. Vuelve a tu query original agregada (DataFinal2.sql, la de portafolio total con MOVIMIENTO_RESIDUAL) — esa la validamos y sí es correcta en magnitud (stock y desembolsos coinciden exacto con Power BI). Es menos informativa porque no separa amortización de fuga, pero no está mintiendo con números mal etiquetados. Es preferible tener un residual honesto sin descomponer, que una descomposición que parece detallada pero está mal.
+Una vez que tengan la columna/tabla puente correcta, vuelvo a armar la query de movimientos con esa clave — el resto de la arquitectura (secuencia de snapshots, fórmula de amortización corregida, nulos después del corte de desembolsos) sigue siendo válida, solo hay que cambiar la clave de cruce.
+
+¿Puedes conseguir esa lista de columnas de FEM_SALDOS_DIARIOS, o preguntarle directamente a Bryan cuál es la clave correcta para cruzar con NROCREDITO?
+
+
+ayudame a analizar detalladamente todo y ver que hacer.
