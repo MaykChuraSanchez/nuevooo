@@ -1,807 +1,190 @@
-me recomendaron hacer esto con toda la informacion que tines en todo el chat ayudame a validar y corregir si se puede:
+Revisé la crítica punto por punto contra la lógica que armamos. Es un análisis sólido — coincido con la mayoría, y en un punto hice mi propia verificación matemática independiente porque es el más grave de todos.
 
-Excelente descubrimiento — estas dos queries de Bryan son literalmente el origen de `BD_Stock_Cartera` y `BD_Desembolsos` en Power BI. La primera resuelve exactamente el problema que identificamos: **cómo separar Fuga de Amortización a nivel de crédito individual**. Te explico la lógica y después te dejo tu query diaria adaptada.
+Donde tiene toda la razón
 
-### Qué hace realmente la Query 1 de Bryan
+Punto 3 — el bug de SALDO_ACTUAL - MONTO_DESEMBOLSADO — es real, y lo verifiqué con números propios:
 
-Trabaja a **nivel de crédito** (CIF_KEY + NRO_CREDITO), no a nivel de portafolio agregado como tu query diaria. Por cada crédito, compara el saldo del mes anterior contra el mes actual y lo clasifica:
+Portafolio de 2 créditos. Crédito A: t0=100, desembolso=20, t1=115 (existía y recibió un desembolso adicional). Crédito B: t0=900, t1=900 (sin cambios).
 
-| CondiciónClasificación                                              |                                                    |
-| ------------------------------------------------------------------- | -------------------------------------------------- |
-| El crédito desembolsó este mes                                      | **NUEVOS** (sin importar si ya tenía saldo previo) |
-| No desembolsó, tenía saldo el mes anterior, y ahora tiene saldo = 0 | **FUGA** = -saldo_anterior                         |
-| No cae en los anteriores y sigue con saldo ≠ 0                      | **AMORTIZACION** = saldo_actual - saldo_anterior   |
-| Nada de lo anterior                                                 | OTROS (no aporta)                                  |
+STOCK_INICIAL total = 1000        STOCK_FINAL total = 1015
 
-El detalle más importante — y el que se te va a escapar fácilmente si adaptas esto rápido — es este bloque:
+NUEVOS      = 20                  (desembolso de A)
+AMORTIZACION (mi formula) = (115-20) + (900-900) = 95
+FUGA        = 0
+
+RHS = 1000 + 20 + 95 + 0 = 1115   ≠   LHS = 1015     → error de 100
+
+El error de reconciliación es exactamente el SALDO_ANTERIOR del crédito que desembolsó de nuevo (100) — porque mi fórmula (copiada literalmente de la query mensual de Bryan) nunca lo resta. Esto rompe la identidad algebraica de verdad, no es solo un tema de nombres. Y tienen razón en que a grano diario esto va a pasar con más frecuencia que a grano mensual (líneas revolventes, tramos adicionales, etc.). Corrección aceptada sin reservas: debe ser SALDO_ACTUAL - SALDO_ANTERIOR - MONTO_DESEMBOLSADO siempre, sin importar la clasificación.
+
+Punto 4 — el filtro ACCOUNT_NUMBER IS NOT NULL contaminando STOCK_FINAL: correcto y me preocupa más que el punto 3, porque ya validamos en el turno anterior que el STOCK_FINAL agregado (sin ese filtro) coincidía exacto con Power BI. Si ahora filtro por ACCOUNT_NUMBER IS NOT NULL antes de sumar el stock total, puedo estar rompiendo silenciosamente esa validación ya confirmada. Corrección aceptada: el stock oficial debe salir de la tabla sin filtrar; el filtro por crédito solo aplica a la clasificación de movimientos, no al total.
+
+Punto 6 — clasificar como AMORTIZACION/FUGA lo que en realidad son días sin desembolsos cargados (18-23 sep): es un bug real que yo mismo debí prevenir, porque la query original que estábamos adaptando ya tenía ese control (ESTADO_CALIDAD='PENDIENTE_DESEMBOLSOS') y no lo trasladé a la versión de movimientos. Corrección aceptada: NUEVOS, AMORTIZACION, FUGA y ERROR_RECONCILIACION deben quedar NULL después de FECHA_HASTA_COMPLETA.
+
+Punto 5 — efecto tipo de cambio: válido. Y vale aclarar algo: este problema no lo introduje yo, ya estaba en la query mensual original de Bryan — su COMPARACION también resta saldos en soles de dos fechas con TC potencialmente distinto sin aislar el efecto. Es una mejora legítima para la v2, aunque conviene medir primero qué porcentaje del portafolio es USD antes de invertir esfuerzo ahí (si es <1%, el impacto es marginal).
+
+Donde matizo (no es que estén equivocados, es una precisión)
+
+Punto 2 — la clasificación "agresiva" (t0=100, t1=105, sin desembolso → AMORTIZACION=+5): aquí sí quiero ser preciso sobre el mecanismo. Esto no rompe la identidad de reconciliación (a diferencia del punto 3): si a un crédito que continúa le sumas SALDO_ACTUAL - SALDO_ANTERIOR tal cual, el álgebra cierra siempre, sin importar el signo. El problema es puramente de interpretación para el pronóstico: estás mezclando bajo la etiqueta "amortización" tanto pagos reales como incrementos no explicados, lo cual sí ensucia la señal que quieres pronosticar. Coincido en que separar OTRO_POSITIVO de AMORTIZACION (residual<0 vs >0) es la forma correcta de no ensuciar esa serie — solo quería que quede claro que es un problema de calidad de señal, no de cuadre matemático.
+
+Sobre la query de validación de grano
+
+La lógica de su query de validación (normalizar quitando ceros a la izquierda y cruzar CIF_KEY+crédito entre FEM_SALDOS_DIARIOS y FEM_ALL_INSTR en una fecha común) está bien construida — es exactamente la prueba correcta. Una sola sugerencia menor: corrieron el chequeo sobre un solo día (2026-08-31); yo agregaría 1-2 fechas más de fin de mes para confirmar que el porcentaje de match es estable en el tiempo y no una coincidencia de ese corte específico.
+
+Siguiente paso
+
+Estoy de acuerdo en no construir la v2 completa todavía — sería apostar 800 líneas sobre un supuesto sin probar. Corre la validación de grano (con 2-3 fechas si puedes) y tráeme:
+
+CREDITOS_DIARIO, CREDITOS_MATCH, CREDITOS_SIN_MATCH, PORCENTAJE_MATCH, CREDITOS_MULTIMONEDA
+
+Con eso, construyo la BaseMotor_Diaria_v2 ya con las tres correcciones obligatorias incorporadas (fórmula de amortización corregida, stock oficial sin filtrar, nulos después del corte de desembolsos) más FUGA_CANDIDATA, OTRO_POSITIVO/NEGATIVO y — si el % de USD lo justifica — EFECTO_TC separado.
+
+
+Query anterior:
+output:
+FECHA_SNAPSHOT	FECHA_SNAPSHOT_ANT	DIAS_INTERVALO	STOCK_INICIAL	STOCK_FINAL	NUEVOS	AMORTIZACION	FUGA	CLIENTES_INICIAL	CLIENTES_FINAL	CREDITOS_INICIAL	CREDITOS_FINAL	STOCK_CALCULADO	ERROR_RECONCILIACION
+5/15/2026	5/14/2026	1	3373147066	3380091287	20991749	-1692973.96	-12354554.25	134001	134333	140388	140910	3380091287	0
+5/18/2026	5/15/2026	3	3380091287	3375650667	25024299	-10989478.13	-18475440.84	134333	134882	140910	142344	3375650667	0
+5/19/2026	5/18/2026	1	3375650667	3366686925	16372879	5525184.33	-30861804.85	134882	135208	142344	142836	3366686925	0
+5/20/2026	5/19/2026	1	3366686925	3372569380	14890563	2094438.66	-11102547.06	135208	135514	142836	143310	3372569380	0
+5/21/2026	5/20/2026	1	3372569380	3379884874	17850323	3025716.15	-13560545.5	135514	135832	143310	143780	3379884874	0
+5/22/2026	5/21/2026	1	3379884874	3385502148	17496099.3	3199592.27	-15078417.51	135832	136125	143780	144235	3385502148	0
+5/25/2026	5/22/2026	3	3385502148	3395038464	24198826	237773.26	-14900283.45	136125	136658	144235	144983	3395038464	0
+5/26/2026	5/25/2026	1	3395038464	3403947044	17481039	769439.27	-9341897.37	136658	136971	144983	145459	3403947044	0
+5/27/2026	5/26/2026	1	3403947044	3410914333	17440142	1844395.61	-12317249.17	136971	137262	145459	145924	3410914333	0
+5/28/2026	5/27/2026	1	3410914333	3418890011	19122778.31	-70807.46	-11076292.4	137262	137567	145924	146376	3418890011	0
+5/29/2026	5/28/2026	1	3418890011	3433465434	28528969.5	964777.18	-14918323.98	137567	137955	146376	146968	3433465434	0
+6/1/2026	5/29/2026	3	3433465434	3431613009	25976651.2	5495169.32	-33324245.35	137955	131760	146968	134004	3431613009	0
+6/2/2026	6/1/2026	1	3431613009	3421390191	13386521	2376369.19	-25985708.1	131760	132027	134004	136377	3421390191	0
+6/3/2026	6/2/2026	1	3421390191	3421259263	10268194.01	6024514.16	-16423635.96	132027	132280	136377	137097	3421259263	0
+6/4/2026	6/3/2026	1	3421259263	3423119379	12091266.02	1917263.08	-12148413.77	132280	132526	137097	137497	3423119379	0
+6/5/2026	6/4/2026	1	3423119379	3429392822	16626287	2651773.41	-13004617.7	132526	132873	137497	137990	3429392822	0
+6/8/2026	6/5/2026	3	3429392822	3434498615	19416445	338677.21	-14649328.52	132873	133421	137990	138737	3434498615	0
+6/9/2026	6/8/2026	1	3434498615	3435972006	9174228	3544029.12	-11244866.28	133421	133666	138737	139112	3435972006	0
+6/10/2026	6/9/2026	1	3435972006	3441893075	12429111	3618380.37	-10126421.98	133666	133936	139112	139509	3441893075	0
+6/11/2026	6/10/2026	1	3441893075	3450213732	15401069	1665247.45	-8745660.04	133936	134239	139509	139950	3450213732	0
+6/12/2026	6/11/2026	1	3450213732	3461036961	19584938	1510221.9	-10271931.05	134239	134613	139950	140475	3461036961	0
+6/15/2026	6/12/2026	3	3461036961	3472962616	29740663	-2744292.31	-15070715.21	134613	135289	140475	141387	3472962616	0
+6/16/2026	6/15/2026	1	3472962616	3477704227	17689777	5290145.51	-18238311.7	135289	135605	141387	141872	3477704227	0
+6/17/2026	6/16/2026	1	3477704227	3476836788	13427386	-2128479.93	-12166345.18	135605	135863	141872	142948	3476836788	0
+6/18/2026	6/17/2026	1	3476836788	3480958830	13159185	2584013.5	-11621156.61	135863	136131	142948	143367	3480958830	0
+6/19/2026	6/18/2026	1	3480958830	3486012845	14281486	1963086.84	-11190557.43	136131	136406	143367	143794	3486012845	0
+6/22/2026	6/19/2026	3	3486012845	3494683663	20356425	3100151.57	-14785759.18	136406	136960	143794	144543	3494683663	0
+6/23/2026	6/22/2026	1	3494683663	3486597866	13833105.47	3802331.17	-25721233.34	136960	137182	144543	144917	3486597866	0
+6/24/2026	6/23/2026	1	3486597866	3492110127	13632700	1134138.19	-9254577.4	137182	137402	144917	145270	3492110127	0
+6/25/2026	6/24/2026	1	3492110127	3497294257	13550640	2492284.73	-10858794.33	137402	137633	145270	145641	3497294257	0
+6/26/2026	6/25/2026	1	3497294257	3499783412	12442068.2	2322265.88	-12275179.11	137633	137890	145641	146035	3499783412	0
+6/30/2026	6/26/2026	4	3499783412	3517310752	45096183.39	-9560187.13	-18008656.29	137890	138879	146035	147349	3517310752	0
+7/1/2026	6/30/2026	1	3517310752	3518543322	18007167	-2400333.97	-14374262.61	138879	133336	147349	136388	3518543322	0
+7/2/2026	7/1/2026	1	3518543322	3513917955	18219474.34	13848350.63	-36693192.41	133336	133752	136388	137283	3513917955	0
+7/3/2026	7/2/2026	1	3513917955	3519748552	18950782	8944791.4	-22064976.65	133752	134140	137283	139759	3519748552	0
+7/6/2026	7/3/2026	3	3519748552	3527211963	27376475.62	-1652869.32	-18260194.75	134140	134863	139759	140711	3527211963	0
+7/7/2026	7/6/2026	1	3527211963	3531524402	15259642.75	213872.28	-11161076.18	134863	135204	140711	141164	3531524402	0
+7/8/2026	7/7/2026	1	3531524402	3539666631	16899540	3741209.66	-12498521.11	135204	135547	141164	141648	3539666631	0
+7/9/2026	7/8/2026	1	3539666631	3546928393	15616992	1543542.03	-9898772.11	135547	135830	141648	142045	3546928393	0
+7/10/2026	7/9/2026	1	3546928393	3554545352	15801376	6900574.4	-15084990.87	135830	136156	142045	142520	3554545352	0
+7/13/2026	7/10/2026	3	3554545352	3563197862	24360237	2328684.67	-18036411.54	136156	136736	142520	143298	3563197862	0
+7/14/2026	7/13/2026	1	3563197862	3575517808	23366056	3040739.16	-14086849.02	136736	137193	143298	143946	3575517808	0
+7/15/2026	7/14/2026	1	3575517808	3582882978	22240147.66	-588226.51	-14286751.5	137193	137597	143946	144540	3582882978	0
+7/16/2026	7/15/2026	1	3582882978	3587678275	18173291.42	-1007834.38	-12370160.4	137597	138007	144540	145102	3587678275	0
+7/17/2026	7/16/2026	1	3587678275	3589175689	17458196	2962115.85	-18922897.72	138007	138387	145102	145637	3589175689	0
+7/20/2026	7/17/2026	3	3589175689	3603267689	30428984	1523043.76	-17860027.94	138387	139089	145637	147233	3603267689	0
+7/21/2026	7/20/2026	1	3603267689	3595886692	17162009.57	5834638.12	-30377644.4	139089	139469	147233	147783	3595886692	0
+7/22/2026	7/21/2026	1	3595886692	3605203208	16724771.36	3319393.1	-10727648.81	139469	139817	147783	148271	3605203208	0
+7/24/2026	7/22/2026	2	3605203208	3617978018	26183271	3600833.14	-17009293.67	139817	140421	148271	149094	3617978018	0
+7/30/2026	7/24/2026	6	3617978018	3644665757	55617048	-2282345.85	-26646962.93	140421	141870	149094	150943	3644665757	0
+7/31/2026	7/30/2026	1	3644665757	3649397014	21600387.84	6938333.94	-23807464.95	141870	142324	150943	151991	3649397014	0
+8/3/2026	7/31/2026	3	3649397014	3638008771	25402637	-1116736.54	-35674143.05	142324	136867	151991	141681	3638008771	0
+8/4/2026	8/3/2026	1	3638008771	3638292799	17408687	1824247.63	-18948907.24	136867	137238	141681	142270	3638292799	0
+8/5/2026	8/4/2026	1	3638292799	3650279653	22154367	4300455.29	-14467967.77	137238	137701	142270	142897	3650279653	0
+8/7/2026	8/5/2026	2	3650279653	3668126868	28201895	2647351.28	-13002032.13	137701	138421	142897	143782	3668126868	0
+8/10/2026	8/7/2026	3	3668126868	3692810170	37429027	3262938.56	-16008662.72	138421	139418	143782	144989	3692810170	0
+8/11/2026	8/10/2026	1	3692810170	3707020908	22824594	5119336.06	-13733192.16	139418	139929	144989	145638	3707020908	0
+8/12/2026	8/11/2026	1	3707020908	3721012717	22406442	4277128.94	-12691762.48	139929	140411	145638	146263	3721012717	0
+8/13/2026	8/12/2026	1	3721012717	3733552332	22226420	3507237.97	-13194042.33	140411	140940	146263	146925	3733552332	0
+8/14/2026	8/13/2026	1	3733552332	3742786151	22146154	9586461.69	-22498796.8	140940	141542	146925	148129	3742786151	0
+8/17/2026	8/14/2026	3	3742786151	3752860239	39997461	-1647509.84	-28275863.78	141542	142933	148129	150645	3752860239	0
+8/18/2026	8/17/2026	1	3752860239	3762023180	20197998	2286181.7	-13321238.84	142933	143510	150645	151412	3762023180	0
+8/19/2026	8/18/2026	1	3762023180	3772816735	21486800	4003531.88	-14696776.79	143510	144066	151412	152154	3772816735	0
+8/20/2026	8/19/2026	1	3772816735	3782360779	17788177	2652849.17	-10896982.25	144066	144581	152154	152842	3782360779	0
+8/21/2026	8/20/2026	1	3782360779	3791298746	20672229	5982567	-17716828.57	144581	145137	152842	153683	3791298746	0
+8/24/2026	8/21/2026	3	3791298746	3802029776	25283462	1423284.51	-15975716.7	145137	146091	153683	154866	3802029776	0
+8/25/2026	8/24/2026	1	3802029776	3793530405	16610392	3101669.8	-28211432.75	146091	146551	154866	155490	3793530405	0
+8/26/2026	8/25/2026	1	3793530405	3800427345	18990834	4670757.12	-16764650.63	146551	147024	155490	156177	3800427345	0
+8/27/2026	8/26/2026	1	3800427345	3810997322	21839356	4147209.35	-15416588.72	147024	147491	156177	156865	3810997322	0
+8/28/2026	8/27/2026	1	3810997322	3819847583	24001261	1630991.9	-16781992.22	147491	147943	156865	157637	3819847583	0
+8/31/2026	8/28/2026	3	3819847583	3830483849	37672059	-3743973.73	-23291819.04	147943	149034	157637	159053	3830483849	0
+9/1/2026	8/31/2026	1	3830483849	3828195010	18294683	16886579.23	-37470101.13	149034	142318	159053	144594	3828195010	0
+9/2/2026	9/1/2026	1	3828195010	3821431382	17854151.4	-8775812.58	-15841966.39	142318	142715	144594	146791	3821431382	0
+9/3/2026	9/2/2026	1	3821431382	3821762946	15007004.62	-774695.45	-13900745.64	142715	143073	146791	147304	3821762946	0
+9/4/2026	9/3/2026	1	3821762946	3822462211	14019028	-2282919.88	-11036842.66	143073	143448	147304	147818	3822462211	0
+9/7/2026	9/4/2026	3	3822462211	3833470692	26964668.27	665877.66	-16622065.71	143448	144321	147818	148924	3833470692	0
+9/8/2026	9/7/2026	1	3833470692	3837053318	14452266	2280681.64	-13150320.83	144321	144701	148924	149459	3837053318	0
+9/9/2026	9/8/2026	1	3837053318	3840925636	14845462.8	19470738.46	-30443883.4	144701	145018	149459	150624	3840925636	0
+9/10/2026	9/9/2026	1	3840925636	3844876795	12794344.8	4379753.54	-13222939.82	145018	145330	150624	151100	3844876795	0
+9/11/2026	9/10/2026	1	3844876795	3852026392	17175111	3491232.5	-13516746.73	145330	145684	151100	151610	3852026392	0
+9/14/2026	9/11/2026	3	3852026392	3866076586	32091272.53	1933433.65	-19974512.01	145684	146553	151610	152791	3866076586	0
+9/15/2026	9/14/2026	1	3866076586	3872792167	20080691.43	2611337.82	-15976448.4	146553	147028	152791	153474	3872792167	0
+9/16/2026	9/15/2026	1	3872792167	3879711961	19955468	9636358.16	-22672032.24	147028	147482	153474	154117	3879711961	0
+9/17/2026	9/16/2026	1	3879711961	3882029940	20874941.1	-2321310.12	-16235651.91	147482	147919	154117	155416	3882029940	0
+9/18/2026	9/17/2026	1	3882029940	3892726519	0	22570984.22	-11874404.33	147919	148446	155416	156115	3892726519	0
+9/21/2026	9/18/2026	3	3892726519	3906277033	0	34329137.98	-20778624.1	148446	149686	156115	157624	3906277033	0
+9/22/2026	9/21/2026	1	3906277033	3895829907	0	24193737.77	-34640863.95	149686	150169	157624	158284	3895829907	0
+9/23/2026	9/22/2026	1	3895829907	3909137546	0	27496121.46	-14188482.71	150169	150664	158284	158951	3909137546	0
+9/24/2026	9/23/2026	1	3909137546	3918689418	0	23105610.72	-13553738.88	150664	151119	158951	159579	3918689418	0
+
+
+output de la query corta que me pasaste:
+
+CREDITOS_DIARIO=159053
+CREDITOS_MATCH=0
+CREDITOS_SIN_MATCH=159053
+PORCENTAJE_MATCH=0
+CREDITOS_MULTIMONEDA=0
+159053	0	159053	0	0
+
+
+
+con respecto al output de la query grande este es un comentario:
+He revisado tu output línea por línea contra los tres bugs que señalaron. Buena noticia parcial, mala noticia real:
+
+Lo que resultó inofensivo en la práctica (aunque sigue siendo un bug real)
+
+Bug #3 (SALDO_ACTUAL - MONTO_DESEMBOLSADO sin restar SALDO_ANTERIOR): revisé las 89 filas y ERROR_RECONCILIACION es 0 exacto en todas, sin excepción. Esto solo puede pasar si, en tu cartera real, ningún crédito (ACCOUNT_NUMBER) recibe un desembolso nuevo mientras ya tenía saldo previo distinto de cero — es decir, cada crédito nace una sola vez y no vuelve a "recargarse". Así que el bug es real en general, pero no se manifestó en tus datos porque el caso que dispara el error simplemente no ocurre en este portafolio. Aun así, lo arreglaría — es gratis y te protege si algún día aparece una línea revolvente o un tramo adicional sobre un crédito existente.
+
+Bug #4 (ACCOUNT_NUMBER IS NOT NULL contaminando el stock oficial): comparé STOCK_FINAL contra lo que ya validamos con Power BI:
+
+Fecha	Tu output	Validado antes
+2026-06-30	3,517,310,752.00	3,517,310,751.9987 ✔️
+2026-07-31	3,649,397,014.08	3,649,397,014.0826 ✔️
+
+Coincide al centavo. En este portafolio, prácticamente todas las filas ya tienen ACCOUNT_NUMBER poblado, así que el filtro no te está robando saldo. También lo dejaría igual de "gratis": agregar el control SALDO_SIN_IDENTIFICADOR no cuesta nada y te avisaría si esto cambia en el futuro.
+
+Lo que SÍ está roto y se ve clarísimo en tus propios números
+
+Bug #6 (clasificar como movimiento real lo que en realidad son días sin desembolsos cargados después del 17-sep): mira la AMORTIZACION diaria a partir del 18-sep:
+
+Fecha	AMORTIZACION	Lectura correcta
+2026-09-18	+22,570,984	Debería ser NULL
+2026-09-21	+34,329,138	Debería ser NULL
+2026-09-22	+24,193,738	Debería ser NULL
+2026-09-23	+27,496,121	Debería ser NULL
+2026-09-24	+23,105,611	Debería ser NULL
+
+Compáralo con el resto de tu histórico: la amortización real ronda entre S/ -2M y +9M por día (mira mayo-agosto). Estos cinco días son 3-5 veces más grandes que cualquier otro y todos positivos — la firma inequívoca de desembolsos reales que no se están capturando (porque pasaron después de tu FECHA_HASTA_COMPLETA=17-sep) y que la query está metiendo a la fuerza dentro de "amortización" solo porque no encuentra el desembolso que los explique.
+
+El efecto agregado: septiembre te sale con AMORTIZACION = 178.9M, cuando cualquier otro mes completo (mayo-agosto) está entre 4.9M y 58M. Si entrenas un modelo de pronóstico con esto tal cual, la serie de amortización de tus días más recientes —justo los que más importan para pronosticar— está contaminada con ruido de magnitud varias veces mayor a la señal real.
+
+Veredicto
+
+No la usaría todavía como versión final. El fix es simple y puntual — no requiere tocar la arquitectura, solo:
 
 sql
-```sql
-WHEN TIPO_MOVIMIENTO = 'NUEVOS'
-    THEN SALDO_ACTUAL - MONTO_DESEMBOLSADO
-```
+CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN NVL(NUEVOS,0) ELSE NULL END AS NUEVOS,
+CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN NVL(AMORTIZACION,0) ELSE NULL END AS AMORTIZACION,
+CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN NVL(FUGA,0) ELSE NULL END AS FUGA,
+CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN ... ELSE NULL END AS ERROR_RECONCILIACION,
 
-Si un crédito **ya existía y además desembolsó** en el mismo periodo, Bryan no lo separa: lo clasifica 100% como NUEVOS, pero luego "rescata" cualquier movimiento adicional (pagos parciales sobre ese mismo crédito) metiéndolo dentro de `AMORTIZACION` mediante esta resta. Si omites esto al adaptar tu query, vas a **subestimar la amortización** en los créditos que desembolsan y pagan en el mismo intervalo.
+(la misma idea que ya tenía tu query original de DataFinal2 con ESTADO_CALIDAD='PENDIENTE_DESEMBOLSOS', que se perdió al reescribir).
 
-### Advertencia antes de adaptar
 
-Bryan usa `FDM.FEM_ALL_INSTR` + `DOCUM_APL_ID` como identificador de crédito. Tu query diaria usa `FDM.FEM_SALDOS_DIARIOS` + `ACCOUNT_NUMBER`. **Necesitas confirmar que `ACCOUNT_NUMBER` en `FEM_SALDOS_DIARIOS` es el mismo identificador de crédito que `DOCUM_APL_ID` en `FEM_ALL_INSTR`** (mismo grano, mismos valores) antes de confiar en la adaptación — si son tablas con grano distinto, la clasificación por crédito no va a cuadrar. Esto no lo puedo verificar yo sin acceso a tu Oracle.
 
-### Tu query diaria adaptada
-
-La idea central: en vez de trabajar solo con el stock total agregado (como en tu query actual), primero bajas a nivel de crédito, aplicas la clasificación de Bryan por cada intervalo entre snapshots (no por mes), y **después** agregas. Esto convierte `ERROR_RECONCILIACION` en una validación real — ya no será tautológicamente cero.
-
-### Qué cambia respecto a tu query original
-
-| Tu query actualQuery adaptada |                                                |                                                               |
-| ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------- |
-| Grano de trabajo              | Agregado (todo el portafolio junto)            | Por crédito (`CIF_KEY` + `ACCOUNT_NUMBER`), agregado al final |
-| `AMORTIZACION` / `FUGA`       | No existen — todo cae en `MOVIMIENTO_RESIDUAL` | Dos series independientes, clasificadas por crédito           |
-| `ERROR_RECONCILIACION`        | Siempre 0 (tautología)                         | Puede ser distinto de 0 — **ahora sí valida algo real**       |
-
-### Qué esperar cuando la corras
-
-Si tu `ACCOUNT_NUMBER` realmente equivale al `DOCUM_APL_ID` de Bryan, `ERROR_RECONCILIACION` debería salir cercano a cero (igual que validamos con `MOVIMIENTO_RESIDUAL` la vez pasada). Si sale sistemáticamente distinto de cero, hay dos causas típicas:
-
-1. Diferencia de grano entre `FEM_SALDOS_DIARIOS` y `FEM_ALL_INSTR` (créditos que se ven distinto entre ambas tablas).
-2. Créditos con movimientos entre monedas o reclasificaciones de cuenta que no caen limpiamente en NUEVOS/AMORTIZACION/FUGA.
-
-### Antes de reemplazar tu query en producción
-
-1. Corre esta versión en paralelo con la tuya sobre el mismo rango de fechas y compara `STOCK_FINAL` (debe ser idéntico) y `NUEVOS+AMORTIZACION+FUGA` vs tu `MOVIMIENTO_RESIDUAL` — deben coincidir casi al centavo, igual que validamos para julio.
-2. Revisa el rendimiento: esta versión hace joins a nivel de crédito individual (potencialmente millones de filas si tu cartera es grande), mientras la tuya solo agrega. Puede ser notablemente más lenta — vale la pena correrla primero con un rango corto (una semana) antes de lanzarla sobre 4+ meses.
-3. Confirma con Bryan si `FEM_SALDOS_DIARIOS` tiene la misma granularidad de crédito que `FEM_ALL_INSTR`, ya que su query fuente usa esta última.
-
-¿Quieres que te ayude a armar la comparación de validación (correr ambas queries y contrastar resultados), o prefieres primero probar esta versión y traerme el resultado para revisarlo?
-
-
-
-/\* ============================================================
-\
-&#x20;  QUERY DIARIA CON DESCOMPOSICION REAL DE MOVIMIENTOS
-\
-&#x20;  (Nuevos / Amortizacion / Fuga separados a nivel de credito)
-\
-
-\
-&#x20;  Adaptacion de la logica de clasificacion mensual de Bryan
-\
-&#x20;  (FEM_ALL_INSTR + DOCUM_APL_ID) aplicada a la secuencia de
-\
-&#x20;  snapshots DIARIOS que ya usa tu query original
-\
-&#x20;  (FEM_SALDOS_DIARIOS + ACCOUNT_NUMBER).
-\
-
-\
-&#x20;  ADVERTENCIA PENDIENTE DE VERIFICAR POR EL USUARIO:
-\
-&#x20;  Se asume que FEM_SALDOS_DIARIOS.ACCOUNT_NUMBER identifica el
-\
-&#x20;  credito al mismo grano que FEM_ALL_INSTR.DOCUM_APL_ID en la
-\
-&#x20;  query de Bryan. Si no es asi, la clasificacion por credito no
-\
-&#x20;  sera correcta. Confirmar antes de usar en produccion.
-\
-&#x20;  \============================================================ \*/
-\
-
-\
-WITH PARAMETROS AS (
-\
-&#x20;   SELECT
-\
-&#x20;       DATE '2026-05-13' AS FECHA_DESDE,
-\
-&#x20;       DATE '2026-09-17' AS FECHA_HASTA_COMPLETA,
-\
-&#x20;       LEAST(
-\
-&#x20;           TRUNC(SYSDATE) - 1,
-\
-&#x20;           (
-\
-&#x20;               SELECT MAX(TRUNC(X.AS_OF_DATE))
-\
-&#x20;               FROM FDM.FEM_SALDOS_DIARIOS X
-\
-&#x20;               WHERE X.COMMON_COA_ID IN (
-\
-&#x20;                   204999999, 204019999, 1203029999,
-\
-&#x20;                   204999903, 204999904, 204999905,
-\
-&#x20;                   204999906, 204999907
-\
-&#x20;               )
-\
-&#x20;                 AND SUBSTR(X.GL_ACCOUNT_ID,1,2) = '14'
-\
-&#x20;                 AND X.ISO_CURRENCY_CD IN ('PSS','USD')
-\
-&#x20;                 AND X.DATA_SOURCE IN ('HP','JC')
-\
-&#x20;           )
-\
-&#x20;       ) AS FECHA_HASTA_STOCK
-\
-&#x20;   FROM DUAL
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  TIPO DE CAMBIO (igual que tu query original)
-\
-&#x20;  \============================================================ \*/
-\
-FECHAS_STOCK AS (
-\
-&#x20;   SELECT DISTINCT TRUNC(F.AS_OF_DATE) AS FECHA
-\
-&#x20;   FROM FDM.FEM_SALDOS_DIARIOS F
-\
-&#x20;   CROSS JOIN PARAMETROS P
-\
-&#x20;   WHERE TRUNC(F.AS_OF_DATE) BETWEEN P.FECHA_DESDE AND P.FECHA_HASTA_STOCK
-\
-&#x20;     AND F.COMMON_COA_ID IN (
-\
-&#x20;         204999999, 204019999, 1203029999,
-\
-&#x20;         204999903, 204999904, 204999905,
-\
-&#x20;         204999906, 204999907
-\
-&#x20;     )
-\
-&#x20;     AND SUBSTR(F.GL_ACCOUNT_ID,1,2) = '14'
-\
-&#x20;     AND F.ISO_CURRENCY_CD IN ('PSS','USD')
-\
-&#x20;     AND F.DATA_SOURCE IN ('HP','JC')
-\
-),
-\
-
-\
-TC_BASE AS (
-\
-&#x20;   SELECT TRUNC(EFFECTIVE_DATE) AS FECHA_TC, MAX(EXCHANGE_RATE) AS EXCHANGE_RATE
-\
-&#x20;   FROM FDM.OFSA_EXCHANGE_RATE_HIST
-\
-&#x20;   WHERE FROM_CURRENCY_CD = 'SFI' AND TO_CURRENCY_CD = 'USD'
-\
-&#x20;   GROUP BY TRUNC(EFFECTIVE_DATE)
-\
-),
-\
-
-\
-TC AS (
-\
-&#x20;   SELECT
-\
-&#x20;       F.FECHA,
-\
-&#x20;       MAX(T.EXCHANGE_RATE) KEEP (DENSE_RANK LAST ORDER BY T.FECHA_TC) AS EXCHANGE_RATE,
-\
-&#x20;       MAX(T.FECHA_TC) AS FECHA_TC_APLICADO
-\
-&#x20;   FROM FECHAS_STOCK F
-\
-&#x20;   LEFT JOIN TC_BASE T ON T.FECHA_TC <= F.FECHA
-\
-&#x20;   GROUP BY F.FECHA
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  PASO NUEVO: SALDO A NIVEL DE CREDITO (no agregado todavia)
-\
-&#x20;  Equivalente a BASE_CREDITO de Bryan, pero a grano diario.
-\
-&#x20;  \============================================================ \*/
-\
-SALDO_CREDITO_DIARIO AS (
-\
-&#x20;   SELECT
-\
-&#x20;       TRUNC(F.AS_OF_DATE) AS FECHA,
-\
-
-\
-&#x20;       LPAD(TRIM(CAST(F.CIF_KEY AS VARCHAR2(30))), 10, '0') AS CIF_KEY,
-\
-&#x20;       TRIM(F.ACCOUNT_NUMBER) AS NRO_CREDITO,
-\
-
-\
-&#x20;       LPAD(TRIM(CAST(F.CIF_KEY AS VARCHAR2(30))), 10, '0')
-\
-&#x20;           || '|' || TRIM(F.ACCOUNT_NUMBER) AS CLIENT_KEY,
-\
-
-\
-&#x20;       SUM(
-\
-&#x20;           CASE
-\
-&#x20;               WHEN F.ISO_CURRENCY_CD = 'USD'
-\
-&#x20;                   THEN NVL(F.CUR_BOOK_BAL,0) \* TC.EXCHANGE_RATE
-\
-&#x20;               ELSE NVL(F.CUR_BOOK_BAL,0)
-\
-&#x20;           END
-\
-&#x20;       ) AS SALDO_SOLES,
-\
-
-\
-&#x20;       SUM(
-\
-&#x20;           CASE
-\
-&#x20;               WHEN F.ISO_CURRENCY_CD = 'USD'
-\
-&#x20;                   THEN NVL(F.CUR_BOOK_BAL,0) \* NVL(F.CUR_GROSS_RATE,0) \* TC.EXCHANGE_RATE
-\
-&#x20;               ELSE NVL(F.CUR_BOOK_BAL,0) \* NVL(F.CUR_GROSS_RATE,0)
-\
-&#x20;           END
-\
-&#x20;       ) AS SALDO_X_TASA_SOLES
-\
-
-\
-&#x20;   FROM FDM.FEM_SALDOS_DIARIOS F
-\
-&#x20;   CROSS JOIN PARAMETROS P
-\
-&#x20;   LEFT JOIN TC ON TC.FECHA = TRUNC(F.AS_OF_DATE)
-\
-
-\
-&#x20;   WHERE TRUNC(F.AS_OF_DATE) BETWEEN P.FECHA_DESDE AND P.FECHA_HASTA_STOCK
-\
-&#x20;     AND F.COMMON_COA_ID IN (
-\
-&#x20;         204999999, 204019999, 1203029999,
-\
-&#x20;         204999903, 204999904, 204999905,
-\
-&#x20;         204999906, 204999907
-\
-&#x20;     )
-\
-&#x20;     AND SUBSTR(F.GL_ACCOUNT_ID,1,2) = '14'
-\
-&#x20;     AND F.ISO_CURRENCY_CD IN ('PSS','USD')
-\
-&#x20;     AND F.DATA_SOURCE IN ('HP','JC')
-\
-&#x20;     AND F.ACCOUNT_NUMBER IS NOT NULL   -- solo filas con credito identificable
-\
-
-\
-&#x20;   GROUP BY
-\
-&#x20;       TRUNC(F.AS_OF_DATE),
-\
-&#x20;       LPAD(TRIM(CAST(F.CIF_KEY AS VARCHAR2(30))), 10, '0'),
-\
-&#x20;       TRIM(F.ACCOUNT_NUMBER)
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  SECUENCIA DE SNAPSHOTS (igual idea que tu SNAPSHOTS original,
-\
-&#x20;  pero ahora es solo la secuencia de fechas, sin totales todavia)
-\
-&#x20;  \============================================================ \*/
-\
-SECUENCIA AS (
-\
-&#x20;   SELECT
-\
-&#x20;       FECHA AS FECHA_SNAPSHOT,
-\
-&#x20;       LAG(FECHA) OVER (ORDER BY FECHA) AS FECHA_SNAPSHOT_ANT
-\
-&#x20;   FROM FECHAS_STOCK
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  DESEMBOLSOS POR CREDITO Y DIA (igual que tu
-\
-&#x20;  DESEMBOLSOS_CREDITO_DIA original)
-\
-&#x20;  \============================================================ \*/
-\
-DESEMBOLSOS_CREDITO_DIA AS (
-\
-&#x20;   SELECT
-\
-&#x20;       TRUNC(D.FECDESEMBOLSO) AS FECHA,
-\
-&#x20;       LPAD(TRIM(CAST(D.CODUNICOCLI AS VARCHAR2(30))), 10, '0') AS CIF_KEY,
-\
-&#x20;       LPAD(TRIM(CAST(D.NROCREDITO AS VARCHAR2(30))), 10, '0') AS NRO_CREDITO,
-\
-&#x20;       SUM(NVL(D.MTODESEMBOLSADOSOL,0)) AS MONTO_DESEMBOLSADO,
-\
-&#x20;       SUM(NVL(D.MTODESEMBOLSADOSOL,0) \* NVL(D.TASAINTERES,0)) AS MONTO_X_TASA
-\
-&#x20;   FROM DESEMBOLSOS_PPE_BUK_TDT D
-\
-&#x20;   CROSS JOIN PARAMETROS P
-\
-&#x20;   WHERE D.FECDESEMBOLSO >= P.FECHA_DESDE
-\
-&#x20;     AND D.FECDESEMBOLSO < P.FECHA_HASTA_COMPLETA + 1
-\
-&#x20;   GROUP BY
-\
-&#x20;       TRUNC(D.FECDESEMBOLSO),
-\
-&#x20;       LPAD(TRIM(CAST(D.CODUNICOCLI AS VARCHAR2(30))), 10, '0'),
-\
-&#x20;       LPAD(TRIM(CAST(D.NROCREDITO AS VARCHAR2(30))), 10, '0')
-\
-),
-\
-
-\
-/\* Desembolsos por credito, agregados al INTERVALO entre snapshots
-\
-&#x20;  (equivalente a VENTAS de Bryan, pero por intervalo, no por mes) \*/
-\
-DESEMBOLSOS_CREDITO_INTERVALO AS (
-\
-&#x20;   SELECT
-\
-&#x20;       S.FECHA_SNAPSHOT,
-\
-&#x20;       S.FECHA_SNAPSHOT_ANT,
-\
-&#x20;       D.CIF_KEY,
-\
-&#x20;       D.NRO_CREDITO,
-\
-&#x20;       SUM(D.MONTO_DESEMBOLSADO) AS MONTO_DESEMBOLSADO,
-\
-&#x20;       SUM(D.MONTO_X_TASA) AS MONTO_X_TASA
-\
-&#x20;   FROM SECUENCIA S
-\
-&#x20;   JOIN DESEMBOLSOS_CREDITO_DIA D
-\
-&#x20;       ON D.FECHA > S.FECHA_SNAPSHOT_ANT
-\
-&#x20;      AND D.FECHA <= S.FECHA_SNAPSHOT
-\
-&#x20;   WHERE S.FECHA_SNAPSHOT_ANT IS NOT NULL
-\
-&#x20;   GROUP BY S.FECHA_SNAPSHOT, S.FECHA_SNAPSHOT_ANT, D.CIF_KEY, D.NRO_CREDITO
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  UNIVERSO DE CREDITOS RELEVANTES POR INTERVALO
-\
-&#x20;  (equivalente a CLIENTES_MES de Bryan)
-\
-&#x20;  \============================================================ \*/
-\
-CREDITOS_INTERVALO AS (
-\
-&#x20;   SELECT S.FECHA_SNAPSHOT, S.FECHA_SNAPSHOT_ANT, A.CIF_KEY, A.NRO_CREDITO
-\
-&#x20;   FROM SECUENCIA S
-\
-&#x20;   JOIN SALDO_CREDITO_DIARIO A ON A.FECHA = S.FECHA_SNAPSHOT_ANT
-\
-&#x20;   WHERE S.FECHA_SNAPSHOT_ANT IS NOT NULL
-\
-
-\
-&#x20;   UNION
-\
-
-\
-&#x20;   SELECT S.FECHA_SNAPSHOT, S.FECHA_SNAPSHOT_ANT, B.CIF_KEY, B.NRO_CREDITO
-\
-&#x20;   FROM SECUENCIA S
-\
-&#x20;   JOIN SALDO_CREDITO_DIARIO B ON B.FECHA = S.FECHA_SNAPSHOT
-\
-&#x20;   WHERE S.FECHA_SNAPSHOT_ANT IS NOT NULL
-\
-
-\
-&#x20;   UNION
-\
-
-\
-&#x20;   /\* tambien se agregan los desembolsos del intervalo, para
-\
-&#x20;      detectar ventas que aun no aparecen en el saldo (igual
-\
-&#x20;      razon que en la query de Bryan) \*/
-\
-&#x20;   SELECT V.FECHA_SNAPSHOT, V.FECHA_SNAPSHOT_ANT, V.CIF_KEY, V.NRO_CREDITO
-\
-&#x20;   FROM DESEMBOLSOS_CREDITO_INTERVALO V
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  COMPARACION POR CREDITO (equivalente a COMPARACION de Bryan)
-\
-&#x20;  \============================================================ \*/
-\
-COMPARACION AS (
-\
-&#x20;   SELECT
-\
-&#x20;       C.FECHA_SNAPSHOT,
-\
-&#x20;       C.FECHA_SNAPSHOT_ANT,
-\
-&#x20;       C.CIF_KEY,
-\
-&#x20;       C.NRO_CREDITO,
-\
-
-\
-&#x20;       NVL(A.SALDO_SOLES,0) AS SALDO_ANTERIOR,
-\
-&#x20;       NVL(B.SALDO_SOLES,0) AS SALDO_ACTUAL,
-\
-
-\
-&#x20;       NVL(V.MONTO_DESEMBOLSADO,0) AS MONTO_DESEMBOLSADO,
-\
-
-\
-&#x20;       CASE WHEN V.CIF_KEY IS NOT NULL THEN 'SI' ELSE 'NO' END AS ESTA_EN_DESEMBOLSOS
-\
-
-\
-&#x20;   FROM CREDITOS_INTERVALO C
-\
-
-\
-&#x20;   LEFT JOIN SALDO_CREDITO_DIARIO A
-\
-&#x20;       ON A.FECHA = C.FECHA_SNAPSHOT_ANT
-\
-&#x20;      AND A.CIF_KEY = C.CIF_KEY
-\
-&#x20;      AND A.NRO_CREDITO = C.NRO_CREDITO
-\
-
-\
-&#x20;   LEFT JOIN SALDO_CREDITO_DIARIO B
-\
-&#x20;       ON B.FECHA = C.FECHA_SNAPSHOT
-\
-&#x20;      AND B.CIF_KEY = C.CIF_KEY
-\
-&#x20;      AND B.NRO_CREDITO = C.NRO_CREDITO
-\
-
-\
-&#x20;   LEFT JOIN DESEMBOLSOS_CREDITO_INTERVALO V
-\
-&#x20;       ON V.FECHA_SNAPSHOT = C.FECHA_SNAPSHOT
-\
-&#x20;      AND V.FECHA_SNAPSHOT_ANT = C.FECHA_SNAPSHOT_ANT
-\
-&#x20;      AND V.CIF_KEY = C.CIF_KEY
-\
-&#x20;      AND V.NRO_CREDITO = C.NRO_CREDITO
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  CLASIFICACION DEL MOVIMIENTO (identica a la logica de Bryan,
-\
-&#x20;  solo que aplicada por intervalo diario, no por mes)
-\
-&#x20;  \============================================================ \*/
-\
-MOVIMIENTOS AS (
-\
-&#x20;   SELECT
-\
-&#x20;       FECHA_SNAPSHOT,
-\
-&#x20;       FECHA_SNAPSHOT_ANT,
-\
-&#x20;       CIF_KEY,
-\
-&#x20;       NRO_CREDITO,
-\
-&#x20;       SALDO_ANTERIOR,
-\
-&#x20;       SALDO_ACTUAL,
-\
-&#x20;       MONTO_DESEMBOLSADO,
-\
-&#x20;       ESTA_EN_DESEMBOLSOS,
-\
-
-\
-&#x20;       CASE
-\
-&#x20;           WHEN ESTA_EN_DESEMBOLSOS = 'SI'
-\
-&#x20;               THEN 'NUEVOS'
-\
-
-\
-&#x20;           WHEN ESTA_EN_DESEMBOLSOS = 'NO'
-\
-&#x20;            AND SALDO_ANTERIOR <> 0
-\
-&#x20;            AND SALDO_ACTUAL = 0
-\
-&#x20;               THEN 'FUGA'
-\
-
-\
-&#x20;           WHEN SALDO_ACTUAL <> 0
-\
-&#x20;               THEN 'AMORTIZACION'
-\
-
-\
-&#x20;           ELSE 'OTROS'
-\
-&#x20;       END AS TIPO_MOVIMIENTO
-\
-
-\
-&#x20;   FROM COMPARACION
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  MOVIMIENTOS AGREGADOS POR INTERVALO (equivalente a
-\
-&#x20;  MOVIMIENTOS_MES de Bryan, pero por FECHA_SNAPSHOT)
-\
-&#x20;  \============================================================ \*/
-\
-MOVIMIENTOS_INTERVALO AS (
-\
-&#x20;   SELECT
-\
-&#x20;       FECHA_SNAPSHOT,
-\
-
-\
-&#x20;       SUM(CASE WHEN TIPO_MOVIMIENTO = 'FUGA' THEN -SALDO_ANTERIOR ELSE 0 END) AS FUGA,
-\
-
-\
-&#x20;       SUM(CASE WHEN TIPO_MOVIMIENTO = 'NUEVOS' THEN MONTO_DESEMBOLSADO ELSE 0 END) AS NUEVOS,
-\
-
-\
-&#x20;       /\* Ojo con este CASE doble: replica exactamente la logica
-\
-&#x20;          de Bryan. Si no se incluye la rama NUEVOS aqui, se
-\
-&#x20;          subestima la amortizacion de creditos que desembolsan
-\
-&#x20;          y pagan en el mismo intervalo. \*/
-\
-&#x20;       SUM(
-\
-&#x20;           CASE
-\
-&#x20;               WHEN TIPO_MOVIMIENTO = 'NUEVOS'
-\
-&#x20;                   THEN SALDO_ACTUAL - MONTO_DESEMBOLSADO
-\
-&#x20;               WHEN TIPO_MOVIMIENTO = 'AMORTIZACION'
-\
-&#x20;                   THEN SALDO_ACTUAL - SALDO_ANTERIOR
-\
-&#x20;               ELSE 0
-\
-&#x20;           END
-\
-&#x20;       ) AS AMORTIZACION
-\
-
-\
-&#x20;   FROM MOVIMIENTOS
-\
-&#x20;   GROUP BY FECHA_SNAPSHOT
-\
-),
-\
-
-\
-/\* ============================================================
-\
-&#x20;  STOCK TOTAL POR SNAPSHOT (igual que tu query original,
-\
-&#x20;  para conservar las columnas de clientes/creditos/tasa/TC)
-\
-&#x20;  \============================================================ \*/
-\
-STOCK_DIARIO AS (
-\
-&#x20;   SELECT
-\
-&#x20;       FECHA,
-\
-&#x20;       SUM(SALDO_SOLES) AS STOCK,
-\
-&#x20;       SUM(SALDO_X_TASA_SOLES) AS STOCK_X_TASA,
-\
-&#x20;       COUNT(DISTINCT CIF_KEY) AS CLIENTES_STOCK,
-\
-&#x20;       COUNT(DISTINCT CLIENT_KEY) AS CREDITOS_STOCK
-\
-&#x20;   FROM SALDO_CREDITO_DIARIO
-\
-&#x20;   GROUP BY FECHA
-\
-),
-\
-
-\
-SNAPSHOTS AS (
-\
-&#x20;   SELECT
-\
-&#x20;       S.FECHA_SNAPSHOT,
-\
-&#x20;       S.FECHA_SNAPSHOT_ANT,
-\
-
-\
-&#x20;       SD_ANT.STOCK AS STOCK_INICIAL,
-\
-&#x20;       SD_ACT.STOCK AS STOCK_FINAL,
-\
-
-\
-&#x20;       SD_ANT.CLIENTES_STOCK AS CLIENTES_INICIAL,
-\
-&#x20;       SD_ACT.CLIENTES_STOCK AS CLIENTES_FINAL,
-\
-
-\
-&#x20;       SD_ANT.CREDITOS_STOCK AS CREDITOS_INICIAL,
-\
-&#x20;       SD_ACT.CREDITOS_STOCK AS CREDITOS_FINAL,
-\
-
-\
-&#x20;       MM.NUEVOS,
-\
-&#x20;       MM.AMORTIZACION,
-\
-&#x20;       MM.FUGA
-\
-
-\
-&#x20;   FROM SECUENCIA S
-\
-&#x20;   JOIN STOCK_DIARIO SD_ACT ON SD_ACT.FECHA = S.FECHA_SNAPSHOT
-\
-&#x20;   LEFT JOIN STOCK_DIARIO SD_ANT ON SD_ANT.FECHA = S.FECHA_SNAPSHOT_ANT
-\
-&#x20;   LEFT JOIN MOVIMIENTOS_INTERVALO MM ON MM.FECHA_SNAPSHOT = S.FECHA_SNAPSHOT
-\
-&#x20;   WHERE S.FECHA_SNAPSHOT_ANT IS NOT NULL
-\
-)
-\
-
-\
-/\* ============================================================
-\
-&#x20;  RESULTADO FINAL — ahora ERROR_RECONCILIACION es una prueba
-\
-&#x20;  REAL: Nuevos, Amortizacion y Fuga se calcularon de forma
-\
-&#x20;  independiente al Stock, a nivel de credito. Si no cierra,
-\
-&#x20;  hay un problema real que investigar (no un plug algebraico).
-\
-&#x20;  \============================================================ \*/
-\
-SELECT
-\
-&#x20;   FECHA_SNAPSHOT,
-\
-&#x20;   FECHA_SNAPSHOT_ANT,
-\
-&#x20;   FECHA_SNAPSHOT - FECHA_SNAPSHOT_ANT AS DIAS_INTERVALO,
-\
-
-\
-&#x20;   ROUND(STOCK_INICIAL, 2)   AS STOCK_INICIAL,
-\
-&#x20;   ROUND(STOCK_FINAL, 2)     AS STOCK_FINAL,
-\
-
-\
-&#x20;   ROUND(NVL(NUEVOS,0), 2)       AS NUEVOS,
-\
-&#x20;   ROUND(NVL(AMORTIZACION,0), 2) AS AMORTIZACION,
-\
-&#x20;   ROUND(NVL(FUGA,0), 2)         AS FUGA,
-\
-
-\
-&#x20;   CLIENTES_INICIAL,
-\
-&#x20;   CLIENTES_FINAL,
-\
-&#x20;   CREDITOS_INICIAL,
-\
-&#x20;   CREDITOS_FINAL,
-\
-
-\
-&#x20;   /\* Reconciliacion REAL (ya no tautologica) \*/
-\
-&#x20;   ROUND(
-\
-&#x20;       STOCK_INICIAL + NVL(NUEVOS,0) + NVL(AMORTIZACION,0) + NVL(FUGA,0),
-\
-&#x20;       2
-\
-&#x20;   ) AS STOCK_CALCULADO,
-\
-
-\
-&#x20;   ROUND(
-\
-&#x20;       STOCK_FINAL - (STOCK_INICIAL + NVL(NUEVOS,0) + NVL(AMORTIZACION,0) + NVL(FUGA,0)),
-\
-&#x20;       2
-\
-&#x20;   ) AS ERROR_RECONCILIACION
-\
-
-\
-FROM SNAPSHOTS
-\
-ORDER BY FECHA_SNAPSHOT;
