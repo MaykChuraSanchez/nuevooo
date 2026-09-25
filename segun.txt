@@ -1,0 +1,519 @@
+Corri las queris que me pasaste solo la primera me dio resultado, la segunda y las demas el output me salio vacio
+
+resultado:
+FECHA	CIF_KEY	NROPROD	PROD	SUBPROD	PROD_DBM	SUBPROD_DBM	VIG	VEN	JUD	CAST
+2026-09-24	0013555066	0047517168	01 Visa		Castigado sin amortización	838	0.00	0.00	0.00	208.14
+2026-09-24	0011584510	0047582036	06 Cred efectivo		Castigado sin amortización	COB.JUD.CRED.EFECTIV	0.00	0.00	0.00	12630.44
+2026-09-24	0022307750	0010150400	01 Visa	Visa Platinum	01 Visa	Visa Platinum	857.70	0.00	0.00	0.00
+2026-09-24	0011625890	0009412609	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0017946639	0009650427	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	1048.83	0.00	0.00	0.00
+2026-09-24	0012841564	0001247464	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0011345621	0047756067	01 Visa		Prejudicial	810	0.00	0.00	0.00	0.00
+2026-09-24	0009989590	0008773045	112		112		714.63	0.00	0.00	0.00
+2026-09-24	0016574433	0008336269	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	148.41	0.00	0.00	0.00
+2026-09-24	0011098149	0001762019	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0015889345	0009118056	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0019075467	0010090099	01 Amex	Amex Platinum	01 Amex	Amex Platinum	698.26	0.00	0.00	0.00
+2026-09-24	0016396969	0047309534	15 Adelanto Sueldo		Castigado sin amortización	COB.JUD.ADEL.SUELDO	0.00	0.00	0.00	133.85
+2026-09-24	0018886238	0001826116	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0001708833	0000021557	99 Otros	Pag. Tasa Venc.	Castigado sin amortización	COB.JUD.R.P.CAP.TRAB	0.00	0.00	0.00	2277.44
+2026-09-24	0017768452	0009216283	01 Amex	Amex Centurion Gold	01 Amex	Amex Centurion Gold	522.43	0.00	0.00	0.00
+2026-09-24	0014669998	0001101257	06 Cred efectivo		06 Cred efectivo	Prestamo facil R1	1067.30	0.00	0.00	0.00
+2026-09-24	0010151528	0001237585	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0013072498	0005313195	01 Visa	Visa Platinum	01 Visa	Visa Platinum	499.27	0.00	0.00	0.00
+2026-09-24	0015955087	0008114035	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	455.81	0.00	0.00	0.00
+2026-09-24	0017257835	0009239274	112		112		363.39	0.00	0.00	0.00
+2026-09-24	0018058265	0002059016	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	16480.18	0.00	0.00	0.00
+2026-09-24	0010352883	0001764699	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	9789.89	0.00	0.00	0.00
+2026-09-24	0011753645	0009824426	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	354.30	0.00	0.00	0.00
+2026-09-24	0009655352	0007021767	01 Amex	Amex Blue	01 Amex	Amex Blue	152.75	0.00	0.00	0.00
+2026-09-24	0021408288	0001997749	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	9875.74	0.00	0.00	0.00
+2026-09-24	0013881957	0047495702	13 Pequeña Empresa	C.Trabajo - Com	Castigado sin amortización	MYP CAPITAL DE TRABAJO	0.00	0.00	0.00	7302.38
+2026-09-24	0022262281	0002195916	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0016359540	0001278302	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0016713964	0047704198	01 Visa		Castigado sin amortización	850	0.00	0.00	0.00	6492.24
+2026-09-24	0014571465	0000112002	99 Otros	Carta Fza. Repub.	99 Otros	Carta Fza. Repub.	189091.20	0.00	0.00	0.00
+2026-09-24	0014219608	0047613713	01 Amex		Castigado sin amortización	857	0.00	0.00	0.00	0.00
+2026-09-24	0009292210	0001954047	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	3055.00	0.00	0.00	0.00
+2026-09-24	0009540836	0007106534	01 Visa	Visa Signature	01 Visa	Visa Signature	0.00	0.00	0.00	0.00
+2026-09-24	0017930579	0001553662	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0008364195	0003210180	10 Castigos Directos		Castigado sin amortización	CASTIGOS DIRECTOS PJ	0.00	0.00	0.00	3726.36
+2026-09-24	0019061392	0001527979	06 Cred efectivo		06 Cred efectivo	Prestamo facil R1	1798.68	0.00	0.00	0.00
+2026-09-24	0016338273	0008629205	01 Amex	Amex Platinum	01 Amex	Amex Platinum	1619.24	0.00	0.00	0.00
+2026-09-24	0015624187	0010251298	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	146.92	0.00	0.00	0.00
+2026-09-24	0010229673	0008466183	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0002999522	0075160661	99 Otros	Factoring	99 Otros	Factoring	150.07	0.00	0.00	0.00
+2026-09-24	0011628379	0009489544	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0016065011	0008791633	112		112		5204.87	0.00	0.00	0.00
+2026-09-24	0013703353	0009835110	01 Visa	Visa Platinum	01 Visa	Visa Platinum	1474.85	0.00	0.00	0.00
+2026-09-24	0015959062	0001327067	06 Cred efectivo		06 Cred efectivo	Prestamo facil R1	2943.33	0.00	0.00	0.00
+2026-09-24	0019070927	0009913675	01 Amex	Amex Blue	01 Amex	Amex Blue	237.48	0.00	0.00	0.00
+2026-09-24	0009516436	0010040992	112		112		657.97	0.00	0.00	0.00
+2026-09-24	0010870402	0007373362	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0018059841	0002123315	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0010369337	0009162610	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0003280336	0006201458	01 Visa	Visa Signature	01 Visa	Visa Signature	1591.31	0.00	0.00	0.00
+2026-09-24	0011629958	0004517128	01 Visa	Premia	01 Visa	Premia	0.00	0.00	0.00	0.00
+2026-09-24	0008376546	0002173998	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	8250.74	0.00	0.00	0.00
+2026-09-24	0016848010	0008750403	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	84.58	0.00	0.00	0.00
+2026-09-24	0013825036	0075216380	99 Otros	Dcto.Factura	99 Otros	Dcto.Factura	497.39	0.00	0.00	0.00
+2026-09-24	0018139820	0008054292	01 Visa	Visa Signature	01 Visa	Visa Signature	77.64	0.00	0.00	0.00
+2026-09-24	0015694932	0007144154	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	22.96	0.00	0.00	0.00
+2026-09-24	0011074914	0009911216	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0010439419	0010345883	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0010827577	0047545461	06 Cred efectivo		Castigado sin amortización	COB.JUD.CRED.EFECTIV	0.00	0.00	0.00	16296.09
+2026-09-24	0015120287	0010074267	112		112		1628.98	0.00	0.00	0.00
+2026-09-24	0017238190	0010341473	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0016468233	0010339328	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	179.89	0.00	0.00	0.00
+2026-09-24	0014104307	0007577842	01 Visa	Premia	01 Visa	Premia	0.00	0.00	0.00	0.00
+2026-09-24	0012298749	0000894456	15 Adelanto Sueldo		Castigado sin amortización	COB.JUD.ADEL.SUELDO	0.00	0.00	0.00	40.32
+2026-09-24	0014830977	0009245467	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0009094740	0001607957	06 Cred efectivo		06 Cred efectivo	Prestamo facil R1	17543.16	0.00	0.00	0.00
+2026-09-24	0016405645	0001419388	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0014578478	0046440604	15 Adelanto Sueldo		Castigado sin amortización	COB.JUD.ADEL.SUELDO	0.00	0.00	0.00	124.93
+2026-09-24	0016162886	0010194585	01 Amex	Amex Centurion Green	01 Amex	Amex Centurion Green	196.56	0.00	0.00	0.00
+2026-09-24	0011083515	0009498336	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	0.00	0.00	0.00	0.00
+2026-09-24	0014308523	0008896798	01 Visa	Visa Platinum	01 Visa	Visa Platinum	0.00	0.00	0.00	0.00
+2026-09-24	0018760167	0009581334	01 Amex	Amex Black	01 Amex	Amex Black	0.00	0.00	0.00	0.00
+2026-09-24	0022170785	0010061829	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	220.11	0.00	0.00	0.00
+2026-09-24	0022332456	0000000280	152		152		45355.96	0.00	0.00	0.00
+2026-09-24	0013806158	0001828894	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0013701117	0001871547	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0021023579	0075286104	99 Otros	Dcto.Factura	99 Otros	Dcto.Factura	12393.74	0.00	0.00	0.00
+2026-09-24	0014123038	0001460057	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	3913.28	0.00	0.00	0.00
+2026-09-24	0009276566	0004465468	01 Visa	Premia	01 Visa	Premia	176.00	0.00	0.00	0.00
+2026-09-24	0013126250	0009762707	112		112		191.66	0.00	0.00	0.00
+2026-09-24	0020284126	0009254624	01 Amex	Amex Black	01 Amex	Amex Black	0.00	0.00	0.00	0.00
+2026-09-24	0016702098	0047307368	01 Visa		Castigado sin amortización	850	0.00	0.00	0.00	154.95
+2026-09-24	0010317858	0005926853	112		112		2255.72	0.00	0.00	0.00
+2026-09-24	0012219198	0001432144	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0015239752	0010232984	01 Visa	Visa Clásica Internacional	01 Visa	Visa Clásica Internacional	249.63	0.00	0.00	0.00
+2026-09-24	0019584237	0047600434	01 Visa		Castigado sin amortización	838	0.00	0.00	0.00	923.40
+2026-09-24	0011361410	0009884018	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0014900038	0008865129	01 Amex	Amex Centurion Gold	01 Amex	Amex Centurion Gold	0.00	0.00	0.00	0.00
+2026-09-24	0022258331	0002164592	02 Convenios	Conv. Tradicional	02 Convenios	Conv. Tradicional	19702.31	0.00	0.00	0.00
+2026-09-24	0016403351	0007879486	01 Visa	Visa Signature	01 Visa	Visa Signature	1347.49	0.00	0.00	0.00
+2026-09-24	0012624902	0009783887	01 Amex	Amex Black	01 Amex	Amex Black	1880.73	0.00	0.00	0.00
+2026-09-24	0014149657	0009474436	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0009325009	0047326510	01 Visa		Castigado sin amortización	822	0.00	0.00	0.00	18587.06
+2026-09-24	0015289112	0001244379	15 Adelanto Sueldo		15 Adelanto Sueldo	Adelanto Sueldo Normal	0.00	0.00	0.00	0.00
+2026-09-24	0010485443	0010046414	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0018364593	0010219555	01 Amex	Amex Platinum	01 Amex	Amex Platinum	0.00	0.00	0.00	0.00
+2026-09-24	0013177579	0008947801	112		112		0.00	0.00	0.00	0.00
+2026-09-24	0014008931	0008810470	01 Visa	Visa Platinum	01 Visa	Visa Platinum	347.90	0.00	0.00	0.00
+2026-09-24	0009560687	0047636693	01 Visa		Castigado sin amortización	838	0.00	0.00	0.00	0.00
+
+
+te comento que en el trabajo tenemos acceso a una pagina:
+https://datanation/table/3934/
+
+aqui podemos buscar tipo fuga y me sale mucha data:
+951 results
+ for "
+fuga
+"
+ in this catalog
+Vista de clientes que fugan del banco
+V_360_CLIENTE_FUGADO
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Visualiza la informacion de los clientes fugados, tipo y motivo de fuga. ...E_PERM_AWS.T_360_CLIENTE_FUGADO
+Vista Que Tiene Información de Fugas Y Renovaciones de Los Productos Plazos
+V_FCT_CAP_FUGAS_RENOVACIONES_PLAZOS
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de fugas y renovaciones de los productos plazos ......
+Modelo de Fuga de Tarjeta de Crédito
+Article
+in
+CU: Variables de Modelo
+/
+Modelos
+Modelo que nos indica cuán propenso es un cliente a dar de baja su tarjeta de crédito con Interbank. La población objetivo para este modelo son los clientes qu...
+Tabla que contiene información del score generado por el modelo fuga convenio ejercito
+scr_churnejer
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla que contiene información del score generado por el modelo fuga convenio ejercito ...NAN...
+Información Agrupada de Los Clientes Fugados por Segmentos
+V_FCT_SEG_FUGADOSSEGMENTOS
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con información agrupada de los clientes fugados por segmentos ...
+Score Modelo Fuga De Saldo De Clientes Cuenta Súper Tasa
+scr_expchurnst
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla Que Contiene Información Del Score Generado Por El Modelo Fuga De Saldo De Clientes Cuenta Súper
+Vista De Clientes Que Fugan Del Banco
+t_360_cliente_fugado
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Visualiza La Informacion De Los Clientes Fugados, Tipo Y Motivo De Fuga. ...V_360_CLIENTE_FUGADO
+CU: Proceso Clientes Fugados BA
+Article
+Calcula mensualmente el indicador de clientes fugados de la banca retail y permite el cálculo del indicador estratégico de Churn. Esta información la usa las un...
+Motivo de fuga del cliente (ej. voluntario, involuntario, inactividad)
+TIPO_CANC_CASCADA
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_360_cliente_fugado
+Motivo de fuga del cliente (ej. voluntario, involuntario, inactividad) ...
+Cliente fugado
+Article
+Es el cliente que cuenta con un producto inactivo o se retiró del banco por decisión voluntaria.
+Motivo de fuga del producto (ej. voluntario, involuntario, inactividad)
+TIPO_CANC
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_360_cliente_fugado
+Motivo de fuga del producto (ej. voluntario, involuntario, inactividad) ...
+Cliente que fuga del banco.
+FUGA_FLG
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_rt_detindicadorbanco_hst
+Cliente que fuga del banco. ...
+Que Fugaron Involuntariamente Distribuido
+QFI_DISTRIBUIDO
+Table
+in
+Aplicaciones
+/
+Aplicaciones
+Fuga Voluntaria
+FUGA_VOLUNTARIA_FLG
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_cr_det_ind_journey_hst
+Clientes Que Fugan Del Banco, Por Tipo De Cancelación Voluntaria.
+Indica si el cliente cancelo uno o todos sus productos(fuga)
+TIPO
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_360_cliente_fugado
+Indica si el cliente cancelo uno o todos sus productos(fuga) ...
+Fuga Cliente
+fuga_flg
+Column
+in
+ALATION_AWS_IBK
+/
+e_perm_aws
+.
+t_agg_rt_detindicadorbanco_hst
+Cliente Que Fuga Del Banco. ...
+Saldo Total Tc De Fuga Voluntaria Tc
+VOLTC_SALDO_FDP_TOT_TC_AMT
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_cr_det_ind_journey_hst
+Saldo Total Tc De Fuga Voluntaria Tc Journey ...
+Indicador De Fuga
+Ind_Fuga
+Column
+in
+Teradata
+/
+e_dw_views
+.
+fact_persona_inst_fin_prod_sbs
+Indicador De Fuga Registrado Por Producto Y Entidad, Se Actualiza Al Mes Siguiente ...
+Fuga Inactividad Flag
+FUGA_INACTIVIDAD_FLG
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_cr_det_ind_journey_hst
+Valor de saldo fdp tot inversión fuga involuntaria
+SALDO_FDP_INVERSION_FUGAINVOLU
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_user_cr_ppto_journey_det
+Valor de saldo fdp tot inversión fuga involuntaria ...
+Tipo De Fuga Del Cliente
+FLG_FUGA
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_ctg_retencion_cluster
+Descripción De La Agrupación De Los Tipos De Fuga Del Cliente ......Tipo de fuga del cliente
+Flag fuga ini freezing nuevos
+FLG_FUGA_INI
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_cr_mfm_cosecha_nuevo
+Flag fuga ini freezing nuevos ...
+Producto De Fuga Por Inactividad Final
+PROD_FUGA_INACT
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_bigd_aws_chcliinac
+Producto De Fuga Por Inactividad Final ...
+Decil De Fuga Por Inactividad Final
+DECIL_FUGA_INACT
+Column
+in
+Teradata
+/
+e_dw_views
+.
+v_agg_bigd_aws_chcliinac
+Decil De Fuga Por Inactividad Final ...
+Vista de fugados
+V_AGG_CR_FACT_FUGADOS
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con los datos de fugados de gestionables 2024
+
+
+o 
+buscamos castigo:
+
+y sale:
+1,275 results
+ for "
+castigo
+"
+ in this catalog
+Vista de Castigos_Cl
+V_RSK_BDS_CASTIGOS_CL
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Información consolidada de los clientes con castigos ......
+Vista de Castigos Al Cierre de Mes
+V_FCT_CNV_MAESTRA_CASTIGO
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene la información de castigos al cierre de mes ......
+CU: Castigos Contables – IFRS9
+Article
+Datos Más Frecuentes: Castigo   Base de Castigos   Castigos Contabilizados   Monto castigado
+Vista de Castigos Contables
+V_IFRS_BASE_CASTIGOS_CONTABLES
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista detallada de clientes que pertenencen a castigos contable ......
+Vista De Los Castigos Históricos
+V_FCT_CNV_CASTIGOS_STOCK
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista Que Contiene Información De Los Castigos Históricos ...E_PERM_AWS.T_FCT_CNV_CASTIGOS_STOCK...
+Operaciones Que Entraron a Judicial, Prejudicial Y Castigo de Todas Las Carteras O Productos
+V_IFRS_TRACK_JUDICIAL
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que muestra información de la tabla (AGG_IFRS_TRACK_OPERACION) cuyas operaciones entraron a judicial (de todas las Carteras/Productos), que informa la re...
+Rcc indicadores consolidados castigos
+V_RSK_FCT_T_CONSOLIDADO_CASTIG
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Informacion de rcc, consolidado de castigos que reporta la sbs ......
+Vista Agrupada de Castigos Dividido por la Información de Convenios Para Los Cierres de Mes
+V_FCT_CNV_CASTIGO_EMPRESA_AGG
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información agrupada de castigos dividido por la información de convenios para los
+Vista de convenios con castigo
+V_CNV_SRC_STOCK_CASTIGOS_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene la información de los convenios con castigos ...NAN...
+Vista De Data De Roa Del Período Mensual Asignada A Cada Empresa
+V_CNV_RECUPERO_CASTIGO_ROA
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista Que Contiene Informacion De La Data De Roa Del Período Mensual Asignada A Cada Empresa ...
+Variables de población objetivo respecto a la cartera de clientes 360 segmento tc sin castigos.
+t_rsk_vars_mdl_rcc_pobobj
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+tabla athena de variables de población objetivo respecto a la cartera de clientes 360 segmento tc sin castigos
+Población objetivo respecto a la cartera de clientes 360 segmento tc sin castigos
+V_RSK_VARS_MDL_RCC_POBOBJ
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Información historica de población objetivo respecto a la cartera de clientes 360 segmento tc sin castigos
+Vista Del Portafolio De Clientes Castigados De Convenios
+V_FCT_CNV_CASTIGOS_DIARIO
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista Que Contiene Información De Acceso A La Tabla Histórica Diaria Que Contiene Información Del Portafolio De Clientes Castigados De Convenios ...
+Tabla Situacion De Castigo Para Clientes
+t_cob_castigo
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla Que Lista La Relación De Clientes Potenciales A Castigo A Los Cuales No Se Debe Castigar ...
+Castigo
+Article
+Clientes que han presentado algún crédito clasificado como perdida o castigo por la SBS.
+Base de Castigos
+Article
+Todas las operaciones castigadas.
+Tabla de Base Castigo Para Aws
+t_ifrs_base_castigo
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla con información de base castigo para aws ...E_DW_VIEWS.V_IFRS_BASE_CASTIGO
+Tabla de Tratamiento Castigo Para Aws
+t_ifrs_tratamiento_castigo
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+con información de los clientes que pertenecen al grupo de castigados para aws ...V_IFRS_TRATAMIENTO_CASTIGO
+Operación de origen del Castigo
+Article
+entran a castigo, cambian su código de operación.
+Informacion de castigos historicos de convenios
+t_fct_cnv_castigos_stock
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Vista que contiene informacion de los castigos historicos ...E_DW_VIEWS.V_FCT_CNV_CASTIGOS_STOCK...CAMPO
+Vista Base Clientes Castigo
+V_IFRS_BASE_CASTIGO
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que tiene le universo de los clientes que están en situación de castigo ...E_PERM_AWS.T_IFRS_BASE_CASTIGO
+Castigos Contabilizados
+Article
+Son los castigos que están registrados en un asiento contable, los cuales son reportados a Contabilidad
+Tabla de recupero castigo con segmento
+t_agg_prov_det_gasto_retail
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla de recupero de castigo con segmento asignado ...
+Vista de tratamiento castigo
+V_IFRS_TRATAMIENTO_CASTIGO
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+E_PERM_AWS.T_IFRS_TRATAMIENTO_CASTIGO
+Vista de Tratamiento Castigo
+tabla_castigos
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Vista con información de los clientes que pertenecen al grupo de castigados ...V_IFRS_TRATAMIENTO_CASTIGO
+
+
+quisas con una palabra clave puedo buscar una tabla y tener mas data o algo que me ayude, tomate tu tiempo y pasame los comentarios
