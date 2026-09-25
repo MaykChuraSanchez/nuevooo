@@ -1,234 +1,108 @@
-Revisé la crítica punto por punto contra la lógica que armamos. Es un análisis sólido — coincido con la mayoría, y en un punto hice mi propia verificación matemática independiente porque es el más grave de todos.
+respuest de claude:
+Conectado (solo lectura). Ahora inspecciono la fuente de `BD_Stock_Cartera` y `BD_Desembolsos`, incluyendo sus particiones (donde vive la consulta M/SQL de origen).Ahora obtengo las particiones (donde vive la consulta M/SQL de origen) de `BD_Stock_Cartera` y `BD_Desembolsos`.## Resultado de la investigación — evidencia directa del modelo
 
-Donde tiene toda la razón
+Conecté en modo de solo lectura y encontré la respuesta completa. Es un hallazgo importante: **el cruce por crédito no vive dentro de Power BI — pasa fuera, y la clave correcta ya está demostrada en la Query 2 de Bryan.**
 
-Punto 3 — el bug de SALDO_ACTUAL - MONTO_DESEMBOLSADO — es real, y lo verifiqué con números propios:
+### 1. Origen de `BD_Stock_Cartera`
 
-Portafolio de 2 créditos. Crédito A: t0=100, desembolso=20, t1=115 (existía y recibió un desembolso adicional). Crédito B: t0=900, t1=900 (sin cambios).
+No es una consulta a Oracle dentro de Power BI. Es un archivo Excel:
 
-STOCK_INICIAL total = 1000        STOCK_FINAL total = 1015
+```
+Origen = Excel.Workbook(File.Contents("D:\OneDrive - Interbank\01. Análisis\Performance PPE_SubProducto\PPE\Desembolsos_DetalleStock_PPE.xlsx"))
+Tabla: "Detalle_Cartera_PPE"
+```
 
-NUEVOS      = 20                  (desembolso de A)
-AMORTIZACION (mi formula) = (115-20) + (900-900) = 95
-FUGA        = 0
+Columnas: `FECHA_ANALISIS, TIPOCLIENTE, SALDO, SALDO_X_TASA, TASA`. **Cero identificadores de crédito.** Esta tabla llega a Power BI ya clasificada por categoría (Stock Inicial/Nuevos/Amortización/Fuga/Stock Final) — la clasificación crédito-por-crédito ya ocurrió **antes**, en el proceso que genera ese Excel (muy probablemente la Query 1 de Bryan, u otra equivalente, corrida directamente contra Oracle).
 
-RHS = 1000 + 20 + 95 + 0 = 1115   ≠   LHS = 1015     → error de 100
+### 2. Origen de `BD_Desembolsos`
 
-El error de reconciliación es exactamente el SALDO_ANTERIOR del crédito que desembolsó de nuevo (100) — porque mi fórmula (copiada literalmente de la query mensual de Bryan) nunca lo resta. Esto rompe la identidad algebraica de verdad, no es solo un tema de nombres. Y tienen razón en que a grano diario esto va a pasar con más frecuencia que a grano mensual (líneas revolventes, tramos adicionales, etc.). Corrección aceptada sin reservas: debe ser SALDO_ACTUAL - SALDO_ANTERIOR - MONTO_DESEMBOLSADO siempre, sin importar la clasificación.
+Mismo archivo Excel, otra hoja:
 
-Punto 4 — el filtro ACCOUNT_NUMBER IS NOT NULL contaminando STOCK_FINAL: correcto y me preocupa más que el punto 3, porque ya validamos en el turno anterior que el STOCK_FINAL agregado (sin ese filtro) coincidía exacto con Power BI. Si ahora filtro por ACCOUNT_NUMBER IS NOT NULL antes de sumar el stock total, puedo estar rompiendo silenciosamente esa validación ya confirmada. Corrección aceptada: el stock oficial debe salir de la tabla sin filtrar; el filtro por crédito solo aplica a la clasificación de movimientos, no al total.
+```
+Tabla: "Desembolsos_TEA_FTP"
+```
 
-Punto 6 — clasificar como AMORTIZACION/FUGA lo que en realidad son días sin desembolsos cargados (18-23 sep): es un bug real que yo mismo debí prevenir, porque la query original que estábamos adaptando ya tenía ese control (ESTADO_CALIDAD='PENDIENTE_DESEMBOLSOS') y no lo trasladé a la versión de movimientos. Corrección aceptada: NUEVOS, AMORTIZACION, FUGA y ERROR_RECONCILIACION deben quedar NULL después de FECHA_HASTA_COMPLETA.
+Columnas: `FECDESEMBOLSO, PERIODO, NROCREDITO, CODUNICOCLI, CODDOC, MTODESEMBOLSADOSOL, TASAINTERES, CANAL, TIPO_PRODUCTO, CLASIFICACION, TRANSFER_CHARGE_CREDIT, AVG_BOOK_BAL, TASA_FTP, COD_SEGMENTO, SEGMENTO` + una columna `Key = NROCREDITO&"||"&CODUNICOCLI` (que solo se usa para cruzar `FTP_CICS` por `PERIODO`, no por crédito). Esta hoja ya trae `TRANSFER_CHARGE_CREDIT`, `AVG_BOOK_BAL` y `TASA_FTP` — es literalmente el resultado de la Query 2 de Bryan, ya exportado.
 
-Punto 5 — efecto tipo de cambio: válido. Y vale aclarar algo: este problema no lo introduje yo, ya estaba en la query mensual original de Bryan — su COMPARACION también resta saldos en soles de dos fechas con TC potencialmente distinto sin aislar el efecto. Es una mejora legítima para la v2, aunque conviene medir primero qué porcentaje del portafolio es USD antes de invertir esfuerzo ahí (si es <1%, el impacto es marginal).
+### 3. Relaciones del modelo
 
-Donde matizo (no es que estén equivocados, es una precisión)
+```
+BD_Desembolsos[FECDESEMBOLSO] → DimCalendario[Date]
+BD_Stock_Cartera[FECHA_ANALISIS] → DimCalendario[Date]
+BD_FemALL[AS_OF_DATE] → DimCalendario[Date]
+BD_FemALL[ORIGINATION_DATE] → LocalDateTable...[Date]
+DB_Desembolsos_PPTO[FECDESEMBOLSO] → DimCalendario[Date]
+DimCalendario[Date] → LocalDateTable...[Date]
+```
 
-Punto 2 — la clasificación "agresiva" (t0=100, t1=105, sin desembolso → AMORTIZACION=+5): aquí sí quiero ser preciso sobre el mecanismo. Esto no rompe la identidad de reconciliación (a diferencia del punto 3): si a un crédito que continúa le sumas SALDO_ACTUAL - SALDO_ANTERIOR tal cual, el álgebra cierra siempre, sin importar el signo. El problema es puramente de interpretación para el pronóstico: estás mezclando bajo la etiqueta "amortización" tanto pagos reales como incrementos no explicados, lo cual sí ensucia la señal que quieres pronosticar. Coincido en que separar OTRO_POSITIVO de AMORTIZACION (residual<0 vs >0) es la forma correcta de no ensuciar esa serie — solo quería que quede claro que es un problema de calidad de señal, no de cuadre matemático.
+**Las 6 relaciones son por fecha.** Ninguna conecta `BD_Stock_Cartera` con `BD_Desembolsos` por cliente o crédito — nunca se cruzan a ese nivel dentro del modelo.
 
-Sobre la query de validación de grano
+### 4. Tablas puente
 
-La lógica de su query de validación (normalizar quitando ceros a la izquierda y cruzar CIF_KEY+crédito entre FEM_SALDOS_DIARIOS y FEM_ALL_INSTR en una fecha común) está bien construida — es exactamente la prueba correcta. Una sola sugerencia menor: corrieron el chequeo sobre un solo día (2026-08-31); yo agregaría 1-2 fechas más de fin de mes para confirmar que el porcentaje de match es estable en el tiempo y no una coincidencia de ese corte específico.
+**No existe ninguna.** Ninguna tabla del modelo mapea `ACCOUNT_NUMBER`, `DOCUM_APL_ID` y `NROCREDITO` entre sí.
 
-Siguiente paso
+### 5. Columnas que mapean los identificadores — evidencia exacta
 
-Estoy de acuerdo en no construir la v2 completa todavía — sería apostar 800 líneas sobre un supuesto sin probar. Corre la validación de grano (con 2-3 fechas si puedes) y tráeme:
+| Tabla en el modelo | Columnas de identificador presentes |
+|---|---|
+| `BD_FemALL` | `CIF_KEY`, `DOCUM_APL_ID` |
+| `BD_Desembolsos` | `CODUNICOCLI`, `NROCREDITO` |
+| `BD_Stock_Cartera` | ninguna |
+| `DB_Desembolsos_PPTO` | ninguna |
 
-CREDITOS_DIARIO, CREDITOS_MATCH, CREDITOS_SIN_MATCH, PORCENTAJE_MATCH, CREDITOS_MULTIMONEDA
+**`ACCOUNT_NUMBER` no aparece en ninguna de las 91 columnas del modelo.** Solo existe en `FDM.FEM_SALDOS_DIARIOS` en Oracle, tabla que Power BI nunca consulta directamente.
 
-Con eso, construyo la BaseMotor_Diaria_v2 ya con las tres correcciones obligatorias incorporadas (fórmula de amortización corregida, stock oficial sin filtrar, nulos después del corte de desembolsos) más FUGA_CANDIDATA, OTRO_POSITIVO/NEGATIVO y — si el % de USD lo justifica — EFECTO_TC separado.
+### 6. Dónde se calculan Fuga/Amortización/Nuevos/Stock Inicial/Stock Final
 
+Son medidas DAX triviales sobre `BD_Stock_Cartera`, ya validadas en fases anteriores:
+```dax
+13. Nuevos       = CALCULATE(SUM(BD_Stock_Cartera[SALDO]), TIPOCLIENTE="Nuevos")
+11. Fuga         = CALCULATE(SUM(BD_Stock_Cartera[SALDO]), TIPOCLIENTE="Fuga")
+12. Amortizacion = CALCULATE(SUM(BD_Stock_Cartera[SALDO]), TIPOCLIENTE="Amortizacion")
+01 Saldo_Fin     = CALCULATE(SUM(BD_Stock_Cartera[SALDO]), TIPOCLIENTE="Stock Final")
+```
+No hay lógica de clasificación por crédito en el modelo — solo suman filas que **ya llegan etiquetadas** desde el Excel.
 
-Query anterior:
-output:
-FECHA_SNAPSHOT	FECHA_SNAPSHOT_ANT	DIAS_INTERVALO	STOCK_INICIAL	STOCK_FINAL	NUEVOS	AMORTIZACION	FUGA	CLIENTES_INICIAL	CLIENTES_FINAL	CREDITOS_INICIAL	CREDITOS_FINAL	STOCK_CALCULADO	ERROR_RECONCILIACION
-5/15/2026	5/14/2026	1	3373147066	3380091287	20991749	-1692973.96	-12354554.25	134001	134333	140388	140910	3380091287	0
-5/18/2026	5/15/2026	3	3380091287	3375650667	25024299	-10989478.13	-18475440.84	134333	134882	140910	142344	3375650667	0
-5/19/2026	5/18/2026	1	3375650667	3366686925	16372879	5525184.33	-30861804.85	134882	135208	142344	142836	3366686925	0
-5/20/2026	5/19/2026	1	3366686925	3372569380	14890563	2094438.66	-11102547.06	135208	135514	142836	143310	3372569380	0
-5/21/2026	5/20/2026	1	3372569380	3379884874	17850323	3025716.15	-13560545.5	135514	135832	143310	143780	3379884874	0
-5/22/2026	5/21/2026	1	3379884874	3385502148	17496099.3	3199592.27	-15078417.51	135832	136125	143780	144235	3385502148	0
-5/25/2026	5/22/2026	3	3385502148	3395038464	24198826	237773.26	-14900283.45	136125	136658	144235	144983	3395038464	0
-5/26/2026	5/25/2026	1	3395038464	3403947044	17481039	769439.27	-9341897.37	136658	136971	144983	145459	3403947044	0
-5/27/2026	5/26/2026	1	3403947044	3410914333	17440142	1844395.61	-12317249.17	136971	137262	145459	145924	3410914333	0
-5/28/2026	5/27/2026	1	3410914333	3418890011	19122778.31	-70807.46	-11076292.4	137262	137567	145924	146376	3418890011	0
-5/29/2026	5/28/2026	1	3418890011	3433465434	28528969.5	964777.18	-14918323.98	137567	137955	146376	146968	3433465434	0
-6/1/2026	5/29/2026	3	3433465434	3431613009	25976651.2	5495169.32	-33324245.35	137955	131760	146968	134004	3431613009	0
-6/2/2026	6/1/2026	1	3431613009	3421390191	13386521	2376369.19	-25985708.1	131760	132027	134004	136377	3421390191	0
-6/3/2026	6/2/2026	1	3421390191	3421259263	10268194.01	6024514.16	-16423635.96	132027	132280	136377	137097	3421259263	0
-6/4/2026	6/3/2026	1	3421259263	3423119379	12091266.02	1917263.08	-12148413.77	132280	132526	137097	137497	3423119379	0
-6/5/2026	6/4/2026	1	3423119379	3429392822	16626287	2651773.41	-13004617.7	132526	132873	137497	137990	3429392822	0
-6/8/2026	6/5/2026	3	3429392822	3434498615	19416445	338677.21	-14649328.52	132873	133421	137990	138737	3434498615	0
-6/9/2026	6/8/2026	1	3434498615	3435972006	9174228	3544029.12	-11244866.28	133421	133666	138737	139112	3435972006	0
-6/10/2026	6/9/2026	1	3435972006	3441893075	12429111	3618380.37	-10126421.98	133666	133936	139112	139509	3441893075	0
-6/11/2026	6/10/2026	1	3441893075	3450213732	15401069	1665247.45	-8745660.04	133936	134239	139509	139950	3450213732	0
-6/12/2026	6/11/2026	1	3450213732	3461036961	19584938	1510221.9	-10271931.05	134239	134613	139950	140475	3461036961	0
-6/15/2026	6/12/2026	3	3461036961	3472962616	29740663	-2744292.31	-15070715.21	134613	135289	140475	141387	3472962616	0
-6/16/2026	6/15/2026	1	3472962616	3477704227	17689777	5290145.51	-18238311.7	135289	135605	141387	141872	3477704227	0
-6/17/2026	6/16/2026	1	3477704227	3476836788	13427386	-2128479.93	-12166345.18	135605	135863	141872	142948	3476836788	0
-6/18/2026	6/17/2026	1	3476836788	3480958830	13159185	2584013.5	-11621156.61	135863	136131	142948	143367	3480958830	0
-6/19/2026	6/18/2026	1	3480958830	3486012845	14281486	1963086.84	-11190557.43	136131	136406	143367	143794	3486012845	0
-6/22/2026	6/19/2026	3	3486012845	3494683663	20356425	3100151.57	-14785759.18	136406	136960	143794	144543	3494683663	0
-6/23/2026	6/22/2026	1	3494683663	3486597866	13833105.47	3802331.17	-25721233.34	136960	137182	144543	144917	3486597866	0
-6/24/2026	6/23/2026	1	3486597866	3492110127	13632700	1134138.19	-9254577.4	137182	137402	144917	145270	3492110127	0
-6/25/2026	6/24/2026	1	3492110127	3497294257	13550640	2492284.73	-10858794.33	137402	137633	145270	145641	3497294257	0
-6/26/2026	6/25/2026	1	3497294257	3499783412	12442068.2	2322265.88	-12275179.11	137633	137890	145641	146035	3499783412	0
-6/30/2026	6/26/2026	4	3499783412	3517310752	45096183.39	-9560187.13	-18008656.29	137890	138879	146035	147349	3517310752	0
-7/1/2026	6/30/2026	1	3517310752	3518543322	18007167	-2400333.97	-14374262.61	138879	133336	147349	136388	3518543322	0
-7/2/2026	7/1/2026	1	3518543322	3513917955	18219474.34	13848350.63	-36693192.41	133336	133752	136388	137283	3513917955	0
-7/3/2026	7/2/2026	1	3513917955	3519748552	18950782	8944791.4	-22064976.65	133752	134140	137283	139759	3519748552	0
-7/6/2026	7/3/2026	3	3519748552	3527211963	27376475.62	-1652869.32	-18260194.75	134140	134863	139759	140711	3527211963	0
-7/7/2026	7/6/2026	1	3527211963	3531524402	15259642.75	213872.28	-11161076.18	134863	135204	140711	141164	3531524402	0
-7/8/2026	7/7/2026	1	3531524402	3539666631	16899540	3741209.66	-12498521.11	135204	135547	141164	141648	3539666631	0
-7/9/2026	7/8/2026	1	3539666631	3546928393	15616992	1543542.03	-9898772.11	135547	135830	141648	142045	3546928393	0
-7/10/2026	7/9/2026	1	3546928393	3554545352	15801376	6900574.4	-15084990.87	135830	136156	142045	142520	3554545352	0
-7/13/2026	7/10/2026	3	3554545352	3563197862	24360237	2328684.67	-18036411.54	136156	136736	142520	143298	3563197862	0
-7/14/2026	7/13/2026	1	3563197862	3575517808	23366056	3040739.16	-14086849.02	136736	137193	143298	143946	3575517808	0
-7/15/2026	7/14/2026	1	3575517808	3582882978	22240147.66	-588226.51	-14286751.5	137193	137597	143946	144540	3582882978	0
-7/16/2026	7/15/2026	1	3582882978	3587678275	18173291.42	-1007834.38	-12370160.4	137597	138007	144540	145102	3587678275	0
-7/17/2026	7/16/2026	1	3587678275	3589175689	17458196	2962115.85	-18922897.72	138007	138387	145102	145637	3589175689	0
-7/20/2026	7/17/2026	3	3589175689	3603267689	30428984	1523043.76	-17860027.94	138387	139089	145637	147233	3603267689	0
-7/21/2026	7/20/2026	1	3603267689	3595886692	17162009.57	5834638.12	-30377644.4	139089	139469	147233	147783	3595886692	0
-7/22/2026	7/21/2026	1	3595886692	3605203208	16724771.36	3319393.1	-10727648.81	139469	139817	147783	148271	3605203208	0
-7/24/2026	7/22/2026	2	3605203208	3617978018	26183271	3600833.14	-17009293.67	139817	140421	148271	149094	3617978018	0
-7/30/2026	7/24/2026	6	3617978018	3644665757	55617048	-2282345.85	-26646962.93	140421	141870	149094	150943	3644665757	0
-7/31/2026	7/30/2026	1	3644665757	3649397014	21600387.84	6938333.94	-23807464.95	141870	142324	150943	151991	3649397014	0
-8/3/2026	7/31/2026	3	3649397014	3638008771	25402637	-1116736.54	-35674143.05	142324	136867	151991	141681	3638008771	0
-8/4/2026	8/3/2026	1	3638008771	3638292799	17408687	1824247.63	-18948907.24	136867	137238	141681	142270	3638292799	0
-8/5/2026	8/4/2026	1	3638292799	3650279653	22154367	4300455.29	-14467967.77	137238	137701	142270	142897	3650279653	0
-8/7/2026	8/5/2026	2	3650279653	3668126868	28201895	2647351.28	-13002032.13	137701	138421	142897	143782	3668126868	0
-8/10/2026	8/7/2026	3	3668126868	3692810170	37429027	3262938.56	-16008662.72	138421	139418	143782	144989	3692810170	0
-8/11/2026	8/10/2026	1	3692810170	3707020908	22824594	5119336.06	-13733192.16	139418	139929	144989	145638	3707020908	0
-8/12/2026	8/11/2026	1	3707020908	3721012717	22406442	4277128.94	-12691762.48	139929	140411	145638	146263	3721012717	0
-8/13/2026	8/12/2026	1	3721012717	3733552332	22226420	3507237.97	-13194042.33	140411	140940	146263	146925	3733552332	0
-8/14/2026	8/13/2026	1	3733552332	3742786151	22146154	9586461.69	-22498796.8	140940	141542	146925	148129	3742786151	0
-8/17/2026	8/14/2026	3	3742786151	3752860239	39997461	-1647509.84	-28275863.78	141542	142933	148129	150645	3752860239	0
-8/18/2026	8/17/2026	1	3752860239	3762023180	20197998	2286181.7	-13321238.84	142933	143510	150645	151412	3762023180	0
-8/19/2026	8/18/2026	1	3762023180	3772816735	21486800	4003531.88	-14696776.79	143510	144066	151412	152154	3772816735	0
-8/20/2026	8/19/2026	1	3772816735	3782360779	17788177	2652849.17	-10896982.25	144066	144581	152154	152842	3782360779	0
-8/21/2026	8/20/2026	1	3782360779	3791298746	20672229	5982567	-17716828.57	144581	145137	152842	153683	3791298746	0
-8/24/2026	8/21/2026	3	3791298746	3802029776	25283462	1423284.51	-15975716.7	145137	146091	153683	154866	3802029776	0
-8/25/2026	8/24/2026	1	3802029776	3793530405	16610392	3101669.8	-28211432.75	146091	146551	154866	155490	3793530405	0
-8/26/2026	8/25/2026	1	3793530405	3800427345	18990834	4670757.12	-16764650.63	146551	147024	155490	156177	3800427345	0
-8/27/2026	8/26/2026	1	3800427345	3810997322	21839356	4147209.35	-15416588.72	147024	147491	156177	156865	3810997322	0
-8/28/2026	8/27/2026	1	3810997322	3819847583	24001261	1630991.9	-16781992.22	147491	147943	156865	157637	3819847583	0
-8/31/2026	8/28/2026	3	3819847583	3830483849	37672059	-3743973.73	-23291819.04	147943	149034	157637	159053	3830483849	0
-9/1/2026	8/31/2026	1	3830483849	3828195010	18294683	16886579.23	-37470101.13	149034	142318	159053	144594	3828195010	0
-9/2/2026	9/1/2026	1	3828195010	3821431382	17854151.4	-8775812.58	-15841966.39	142318	142715	144594	146791	3821431382	0
-9/3/2026	9/2/2026	1	3821431382	3821762946	15007004.62	-774695.45	-13900745.64	142715	143073	146791	147304	3821762946	0
-9/4/2026	9/3/2026	1	3821762946	3822462211	14019028	-2282919.88	-11036842.66	143073	143448	147304	147818	3822462211	0
-9/7/2026	9/4/2026	3	3822462211	3833470692	26964668.27	665877.66	-16622065.71	143448	144321	147818	148924	3833470692	0
-9/8/2026	9/7/2026	1	3833470692	3837053318	14452266	2280681.64	-13150320.83	144321	144701	148924	149459	3837053318	0
-9/9/2026	9/8/2026	1	3837053318	3840925636	14845462.8	19470738.46	-30443883.4	144701	145018	149459	150624	3840925636	0
-9/10/2026	9/9/2026	1	3840925636	3844876795	12794344.8	4379753.54	-13222939.82	145018	145330	150624	151100	3844876795	0
-9/11/2026	9/10/2026	1	3844876795	3852026392	17175111	3491232.5	-13516746.73	145330	145684	151100	151610	3852026392	0
-9/14/2026	9/11/2026	3	3852026392	3866076586	32091272.53	1933433.65	-19974512.01	145684	146553	151610	152791	3866076586	0
-9/15/2026	9/14/2026	1	3866076586	3872792167	20080691.43	2611337.82	-15976448.4	146553	147028	152791	153474	3872792167	0
-9/16/2026	9/15/2026	1	3872792167	3879711961	19955468	9636358.16	-22672032.24	147028	147482	153474	154117	3879711961	0
-9/17/2026	9/16/2026	1	3879711961	3882029940	20874941.1	-2321310.12	-16235651.91	147482	147919	154117	155416	3882029940	0
-9/18/2026	9/17/2026	1	3882029940	3892726519	0	22570984.22	-11874404.33	147919	148446	155416	156115	3892726519	0
-9/21/2026	9/18/2026	3	3892726519	3906277033	0	34329137.98	-20778624.1	148446	149686	156115	157624	3906277033	0
-9/22/2026	9/21/2026	1	3906277033	3895829907	0	24193737.77	-34640863.95	149686	150169	157624	158284	3895829907	0
-9/23/2026	9/22/2026	1	3895829907	3909137546	0	27496121.46	-14188482.71	150169	150664	158284	158951	3909137546	0
-9/24/2026	9/23/2026	1	3909137546	3918689418	0	23105610.72	-13553738.88	150664	151119	158951	159579	3918689418	0
+### 7. El identificador real para seguir un crédito entre periodos — la prueba está en la propia Query 2 de Bryan
+
+Miren el JOIN real que Bryan usa para traer `TASA_FTP` desde `FEM_ALL_INSTR` hacia `DESEMBOLSOS_PPE_BUK_TDT`:
+
+```sql
+LEFT JOIN FEM_CREDITO F
+    ON F.AS_OF_DATE = LAST_DAY(D.FECDESEMBOLSO)
+   AND F.CIF_KEY    = LPAD(TRIM(D.CODUNICOCLI), 10, '0')
+   AND F.NRO_CREDITO = LPAD(TRIM(D.NROCREDITO), 10, '0')
+```
+
+Donde `F.NRO_CREDITO` se define arriba como:
+```sql
+LPAD(TO_CHAR(F.DOCUM_APL_ID), 10, '0') AS NRO_CREDITO
+```
+
+**Esto demuestra, con una query que ya está en producción alimentando `TASA_FTP` en tu Power BI actual (y que ya validamos que reproduce las tasas exactas), que `DOCUM_APL_ID` (de `FEM_ALL_INSTR`) es el mismo identificador que `NROCREDITO` (de `DESEMBOLSOS_PPE_BUK_TDT`)**, ambos rellenados a 10 dígitos. No es una suposición — es el join que ya funciona.
+
+## Propuesta concreta de tabla puente
+
+| Campo | ¿Disponible? | Dónde | Estado |
+|---|---|---|---|
+| `CIF_KEY` | Sí | `FEM_ALL_INSTR.CIF_KEY`, `FEM_SALDOS_DIARIOS.CIF_KEY`, `DESEMBOLSOS_PPE_BUK_TDT.CODUNICOCLI` | Común a las tres fuentes |
+| `DOCUM_APL_ID` | Sí | `FEM_ALL_INSTR.DOCUM_APL_ID` | **Confirmado = `NROCREDITO`** (evidencia arriba) |
+| `NROCREDITO` | Sí | `DESEMBOLSOS_PPE_BUK_TDT.NROCREDITO` | **Confirmado = `DOCUM_APL_ID`** |
+| `ACCOUNT_NUMBER` | Sí, pero **aislado** | `FEM_SALDOS_DIARIOS.ACCOUNT_NUMBER` | **Sin correspondencia probada** con los otros tres (0% match confirmado) |
+
+**Conclusión: la clave puente que ya funciona es `CIF_KEY + DOCUM_APL_ID ≡ CIF_KEY + NROCREDITO`.** El problema nunca fue la lógica de clasificación que armamos — fue que tu query diaria usaba `FEM_SALDOS_DIARIOS.ACCOUNT_NUMBER` (una tabla/identificador que nadie más en este ecosistema usa) en vez de `FEM_ALL_INSTR.DOCUM_APL_ID` (el identificador real que Bryan ya usa y que sí cruza con `NROCREDITO`).
+
+**Siguiente paso necesario:** confirmar si `FDM.FEM_ALL_INSTR` tiene grano **diario** (como `FEM_SALDOS_DIARIOS`) o solo mensual como lo usa Bryan. Corre esto:
+```sql
+SELECT COUNT(DISTINCT TRUNC(AS_OF_DATE)) AS FECHAS_DISTINTAS,
+       MIN(TRUNC(AS_OF_DATE)) AS MIN_FECHA,
+       MAX(TRUNC(AS_OF_DATE)) AS MAX_FECHA
+FROM FDM.FEM_ALL_INSTR
+WHERE AS_OF_DATE >= DATE '2026-08-01' AND AS_OF_DATE <= DATE '2026-08-31';
+```
+Si devuelve ~31 fechas (no solo la de fin de mes), `FEM_ALL_INSTR` tiene grano diario y es la tabla correcta para reconstruir tu `BaseMotor_Diaria_v2` — reemplazando `FEM_SALDOS_DIARIOS` + `ACCOUNT_NUMBER` por `FEM_ALL_INSTR` + `DOCUM_APL_ID`. Si solo devuelve 1 fecha (fin de mes), entonces no existe fuente diaria con el identificador correcto y habría que preguntarle al equipo de datos si `FEM_SALDOS_DIARIOS` puede incorporar `DOCUM_APL_ID` como columna adicional.
 
 
-output de la query corta que me pasaste:
-
-CREDITOS_DIARIO=159053
-CREDITOS_MATCH=0
-CREDITOS_SIN_MATCH=159053
-PORCENTAJE_MATCH=0
-CREDITOS_MULTIMONEDA=0
-159053	0	159053	0	0
-
-
-
-con respecto al output de la query grande este es un comentario:
-He revisado tu output línea por línea contra los tres bugs que señalaron. Buena noticia parcial, mala noticia real:
-
-Lo que resultó inofensivo en la práctica (aunque sigue siendo un bug real)
-
-Bug #3 (SALDO_ACTUAL - MONTO_DESEMBOLSADO sin restar SALDO_ANTERIOR): revisé las 89 filas y ERROR_RECONCILIACION es 0 exacto en todas, sin excepción. Esto solo puede pasar si, en tu cartera real, ningún crédito (ACCOUNT_NUMBER) recibe un desembolso nuevo mientras ya tenía saldo previo distinto de cero — es decir, cada crédito nace una sola vez y no vuelve a "recargarse". Así que el bug es real en general, pero no se manifestó en tus datos porque el caso que dispara el error simplemente no ocurre en este portafolio. Aun así, lo arreglaría — es gratis y te protege si algún día aparece una línea revolvente o un tramo adicional sobre un crédito existente.
-
-Bug #4 (ACCOUNT_NUMBER IS NOT NULL contaminando el stock oficial): comparé STOCK_FINAL contra lo que ya validamos con Power BI:
-
-Fecha	Tu output	Validado antes
-2026-06-30	3,517,310,752.00	3,517,310,751.9987 ✔️
-2026-07-31	3,649,397,014.08	3,649,397,014.0826 ✔️
-
-Coincide al centavo. En este portafolio, prácticamente todas las filas ya tienen ACCOUNT_NUMBER poblado, así que el filtro no te está robando saldo. También lo dejaría igual de "gratis": agregar el control SALDO_SIN_IDENTIFICADOR no cuesta nada y te avisaría si esto cambia en el futuro.
-
-Lo que SÍ está roto y se ve clarísimo en tus propios números
-
-Bug #6 (clasificar como movimiento real lo que en realidad son días sin desembolsos cargados después del 17-sep): mira la AMORTIZACION diaria a partir del 18-sep:
-
-Fecha	AMORTIZACION	Lectura correcta
-2026-09-18	+22,570,984	Debería ser NULL
-2026-09-21	+34,329,138	Debería ser NULL
-2026-09-22	+24,193,738	Debería ser NULL
-2026-09-23	+27,496,121	Debería ser NULL
-2026-09-24	+23,105,611	Debería ser NULL
-
-Compáralo con el resto de tu histórico: la amortización real ronda entre S/ -2M y +9M por día (mira mayo-agosto). Estos cinco días son 3-5 veces más grandes que cualquier otro y todos positivos — la firma inequívoca de desembolsos reales que no se están capturando (porque pasaron después de tu FECHA_HASTA_COMPLETA=17-sep) y que la query está metiendo a la fuerza dentro de "amortización" solo porque no encuentra el desembolso que los explique.
-
-El efecto agregado: septiembre te sale con AMORTIZACION = 178.9M, cuando cualquier otro mes completo (mayo-agosto) está entre 4.9M y 58M. Si entrenas un modelo de pronóstico con esto tal cual, la serie de amortización de tus días más recientes —justo los que más importan para pronosticar— está contaminada con ruido de magnitud varias veces mayor a la señal real.
-
-Veredicto
-
-No la usaría todavía como versión final. El fix es simple y puntual — no requiere tocar la arquitectura, solo:
-
-sql
-CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN NVL(NUEVOS,0) ELSE NULL END AS NUEVOS,
-CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN NVL(AMORTIZACION,0) ELSE NULL END AS AMORTIZACION,
-CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN NVL(FUGA,0) ELSE NULL END AS FUGA,
-CASE WHEN FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA THEN ... ELSE NULL END AS ERROR_RECONCILIACION,
-
-(la misma idea que ya tenía tu query original de DataFinal2 con ESTADO_CALIDAD='PENDIENTE_DESEMBOLSOS', que se perdió al reescribir).
-
-
-
-de ahi cuando analice el auput de los match:
-
-
-
-0% de match — esto no es un problema menor, es una alarma que invalida el enfoque de crédito-por-crédito que armamos, y tengo que corregir algo que dije en el turno anterior.
-
-Tengo que retractarme de una conclusión
-
-Dije que el bug #3 (SALDO_ACTUAL - MONTO_DESEMBOLSADO sin restar SALDO_ANTERIOR) resultó "inofensivo" porque ERROR_RECONCILIACION salía en 0 en las 89 filas. Mi explicación fue: "ningún crédito recibe un desembolso mientras ya tenía saldo". Con este resultado de 0% de match, esa explicación es incorrecta. La razón real es mucho más grave:
-
-ACCOUNT_NUMBER (en FEM_SALDOS_DIARIOS) y NROCREDITO (en DESEMBOLSOS_PPE_BUK_TDT) casi seguro tampoco coinciden entre sí — igual que no coincide contra DOCUM_APL_ID. Eso significa que el join a nivel de crédito que armé en la query de movimientos nunca está encontrando el crédito correcto. El ERROR_RECONCILIACION=0 no es evidencia de que la clasificación esté bien: es porque el álgebra siempre cierra sin importar en qué balde cae cada dólar (mientras nada se pierda ni se duplique en el total).
-
-Qué está pasando en realidad con tus números
-
-Cuando el join falla, cada crédito nuevo genera dos filas que no se reconocen entre sí:
-
-Una fila "fantasma" del lado de desembolsos (con NRO_CREDITO = NROCREDITO), que reporta NUEVOS = +monto correctamente (porque ese valor sale directo de la tabla de desembolsos, sin necesitar el join).
-Una fila real del lado del stock (con NRO_CREDITO = ACCOUNT_NUMBER), donde aparece el saldo real nuevo, pero como nunca encuentra el desembolso que lo explique, cae en SALDO_ACTUAL <> 0 → AMORTIZACION = +saldo_actual.
-
-Esto explica exactamente esos valores positivos de AMORTIZACION que ya habíamos visto y que no supimos explicar del todo (19-mayo: +5.5M, 22-mayo: +3.2M, etc.) — no son incrementos misteriosos aislados, son créditos nuevos mal etiquetados como amortización, en todo el histórico, no solo después del 17-sep. FUGA no debería estar tan afectada (su lógica no depende de encontrar un desembolso), pero AMORTIZACION sí está estructuralmente contaminada.
-
-Por qué no voy a intentar parchar esto
-
-Podría intentar ajustar la normalización de IDs otra vez, pero un 0% exacto sobre 159,053 créditos no es un problema de formato (ceros a la izquierda, espacios, etc.) — si fuera eso, veríamos algún porcentaje de coincidencia, no cero absoluto. Esto sugiere que ACCOUNT_NUMBER y DOCUM_APL_ID son sistemas de identificación distintos por diseño (por ejemplo, número de cuenta del core bancario vs. ID de aplicación/crédito de originación). Seguir ajustando el join sin saber esto sería adivinar.
-
-Recomendación concreta
-
-No construyas la v2 con clasificación a nivel de crédito todavía. En su lugar:
-
-Pregúntale a Bryan o al equipo de datos si existe una tabla puente (CIF_KEY + NROCREDITO ↔ ACCOUNT_NUMBER) o si FEM_SALDOS_DIARIOS tiene alguna otra columna (por ejemplo, un DOCUM_APL_ID que no estemos usando) que sí corresponda a NROCREDITO. Pídele que corra esto para confirmar si esa columna existe:
-sql
-   SELECT column_name FROM ALL_TAB_COLUMNS
-   WHERE table_name = 'FEM_SALDOS_DIARIOS' AND owner = 'FDM'
-   ORDER BY column_name;
-
-Si aparece DOCUM_APL_ID (o algo equivalente), repite la validación de match usando esa columna en vez de ACCOUNT_NUMBER.
-
-Mientras tanto, no uses la versión con AMORTIZACION/FUGA separadas. Vuelve a tu query original agregada (DataFinal2.sql, la de portafolio total con MOVIMIENTO_RESIDUAL) — esa la validamos y sí es correcta en magnitud (stock y desembolsos coinciden exacto con Power BI). Es menos informativa porque no separa amortización de fuga, pero no está mintiendo con números mal etiquetados. Es preferible tener un residual honesto sin descomponer, que una descomposición que parece detallada pero está mal.
-Una vez que tengan la columna/tabla puente correcta, vuelvo a armar la query de movimientos con esa clave — el resto de la arquitectura (secuencia de snapshots, fórmula de amortización corregida, nulos después del corte de desembolsos) sigue siendo válida, solo hay que cambiar la clave de cruce.
-
-¿Puedes conseguir esa lista de columnas de FEM_SALDOS_DIARIOS, o preguntarle directamente a Bryan cuál es la clave correcta para cruzar con NROCREDITO?
-
-
-ayudame a analizar detalladamente todo y ver que hacer.
+respuesta de la query:
+CREDITOS_DESEMBOLSADOS,"MATCH_CIF_Y_CREDITO","SIN_MATCH_CREDITO","PORCENTAJE_MATCH_CREDITO","MATCH_SOLO_CLIENTE","PORCENTAJE_MATCH_CLIENTE"
+15260,0,15260,0,15260,100
