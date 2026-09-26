@@ -1,0 +1,199 @@
+una ultima consulta podria preguntar or los desembolsos en teradata:
+ for "
+desembolsos
+"
+ in this catalog
+CU: Desembolsos HPC
+Article
+Desembolsos de HPC para productos préstamos, vehicular e hipotecario.
+Desembolsos préstamos personales
+V_AGG_RT_DESEMB_PP_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Información consolidada de los desembolsos de préstamos personales ......
+Desembolsos de prestamos personales
+V_AGG_RT_HPC_REP_PERSONAL_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con informacion consolidada de desembolsos de prestamos personales con indicador seguro ...E_PERM_AWS.T_AGG_RT_HPC_REP_PERSONAL_HST
+Información de desembolsos extracash tc
+V_AGG_RT_DESEMB_EXTRACASH_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con información de los desembolsos de extracash tc ...NAN...
+Vista desembolsos compra deuda
+V_AGG_RT_COMP_DEUDA_AUTO
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Contiene la información historica de los desembolsos de compra deuda cdq ...E_PERM_AWS.T_AGG_RT_COMP_DEUDA_AUTO
+Informacion de desembolso por tipo de deuda
+V_RSK_INDIC_DESEMB_DET
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Informacion de desembolso por tipo de deuda en el mes ...E_PERM_AWS.T_RSK_INDIC_DESEMB_DET...
+Vista fcd documento de cobranza y desembolso
+V_MST_VPC_FCD_FINCOB_DOCUMENTOS
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de documentos de la fuente fcd cobranza, comex, descuentos y factoring ...E_PERM_AWS.T_MST_VPC_FCD_FINCOB_DOCUMENTOS
+Ventas - desembolsos vehicular
+V_AGG_RT_DESEMB_VEH_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Contiene solicitudes y desembolsos del producto vehicular ...NAN...
+Desembolsos de convenios a aws
+V_EXPORT_FCT_CNV_VENTAS_MDL
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de la fuente desembolsos de convenios para llevar hacia aws. ...NAN...
+Tabla Dataset Desembolso Histórico
+t_fact_vpc_agg_cli_desembolso_hst
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla En Aws Que Contiene Informacion Del Histórico De Desembolsos De Créditos De Acuerdo A La Vp Comercial
+Desembolsos de pp a aws
+V_EXPORT_AGG_RT_DESEMB_PP_HST_MDL
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de la fuente desembolsos de prestamo personal para llevar hacia aws. .
+Relación cliente y cuenta desembolso
+V_REL_CUENTA_CLI_DESEMBOLSO_VPC
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con información del desembolso por cuenta del cliente vpc ......
+Vista para exportar la fuente de desembolsos de convenios a aws
+fct_cnv_ventas_mdl
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Vista que contiene información de la fuente desembolsos de convenios ...NAN...
+CU: Desembolsos Crecer
+Article
+  Default   LGD   Vistas de referencia: - e_dw_views.v_ifrs_crecer_desemb (Vista de crecer desembolsos
+Vista con información de desembolsos de compra deuda defensa y compra deuda ataque
+V_SCO_FTC_COMPRADEUDA_HIST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con información de desembolsos de compra deuda defensa y compra deuda ataque ...NAN...
+Informacion de desembolso por tipo de deuda
+t_rsk_indic_desemb_det
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Informacion de desembolso por tipo de deuda en el mes ...E_DW_VIEWS.V_RSK_INDIC_DESEMB_DET...
+Desembolsos de tc a aws
+V_EXPORT_FCT_RT_TC_HISTORICO_MDL
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de la fuente desembolsos de tarjeta de crédito para llevar hacia aws.
+Vista Dataset Desembolso Histórico
+V_FACT_VPC_AGG_CLI_DESEMBOLSO_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene el histórico de desembolsos de créditos de acuerdo a la vp comercial ......
+Historia relación cliente y desembolso.
+V_REL_CTA_CLI_DESEMBL_VPC_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista con información histórica del desembolso por cuenta de clientes vpc. ...NAN...
+Vista de Transacciónes Diarias del Adelanto de Sueldo
+V_AGG_CS_DESEMBOLSO_DIARIO_HST
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información histórica de los desembolso de adelant de de cuenta sueldo ......
+Vista De Los Desembolso Por Credito De Convenio
+V_FCT_CNV_DESEMBOLSO_REP
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista Que Contiene Informacion Historica De Los Desembolso Por Credito De Convenio ......
+Desembolsos de il a aws
+V_EXPORT_VTA_IL_HST_MDL
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de la fuente desembolsos de incremento de linea para llevar hacia aws.
+Tabla Con la Información de Variables Base de la Fuente Desembolso Hipotecario
+t_agg_desembolsos_hip_mdl_hst
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+predictivos ...V_AGG_DESEMBOLSOS_HIP_MDL_HST...
+Tabla aws de fcd documento de cobranza y desembolso
+t_mst_vpc_fcd_fincob_documentos
+Table
+in
+ALATION_AWS_IBK
+/
+AwsDataCatalog.e_perm_aws
+Tabla en aws que contiene informacion de documentos de la fuente fcd cobranza, comex, descuentos y factoring ...V_MST_VPC_FCD_FINCOB_DOCUMENTOS
+Vista Que Contiene Información de Los Desembolsos Extracash
+V_AGG_DESEMBOLSO_EXTRACASH
+Table
+in
+Teradata
+/
+E_DW_VIEWS
+Vista que contiene información de los desembolsos del producto extracash ......
+
+
+
+o no se podria los mensuales
