@@ -1,0 +1,733 @@
+WITH PARAMETROS AS (
+    SELECT
+        DATE '2026-05-13' AS FECHA_DESDE,
+        DATE '2026-09-17' AS FECHA_HASTA_COMPLETA,
+
+        LEAST(
+            TRUNC(SYSDATE) - 1,
+            (
+                SELECT MAX(TRUNC(X.AS_OF_DATE))
+                FROM FDM.FEM_SALDOS_DIARIOS X
+                WHERE X.COMMON_COA_ID IN (
+                    204999999,
+                    204019999,
+                    1203029999,
+                    204999903,
+                    204999904,
+                    204999905,
+                    204999906,
+                    204999907
+                )
+                  AND SUBSTR(X.GL_ACCOUNT_ID,1,2) = '14'
+                  AND X.ISO_CURRENCY_CD IN ('PSS','USD')
+                  AND X.DATA_SOURCE IN ('HP','JC')
+            )
+        ) AS FECHA_HASTA_STOCK
+
+    FROM DUAL
+),
+
+FECHAS_STOCK AS (
+    SELECT DISTINCT
+        TRUNC(F.AS_OF_DATE) AS FECHA
+
+    FROM FDM.FEM_SALDOS_DIARIOS F
+    CROSS JOIN PARAMETROS P
+
+    WHERE TRUNC(F.AS_OF_DATE)
+          BETWEEN P.FECHA_DESDE AND P.FECHA_HASTA_STOCK
+
+      AND F.COMMON_COA_ID IN (
+          204999999,
+          204019999,
+          1203029999,
+          204999903,
+          204999904,
+          204999905,
+          204999906,
+          204999907
+      )
+
+      AND SUBSTR(F.GL_ACCOUNT_ID,1,2) = '14'
+      AND F.ISO_CURRENCY_CD IN ('PSS','USD')
+      AND F.DATA_SOURCE IN ('HP','JC')
+),
+
+TC_BASE AS (
+    SELECT
+        TRUNC(EFFECTIVE_DATE) AS FECHA_TC,
+        MAX(EXCHANGE_RATE) AS EXCHANGE_RATE
+
+    FROM FDM.OFSA_EXCHANGE_RATE_HIST
+
+    WHERE FROM_CURRENCY_CD = 'SFI'
+      AND TO_CURRENCY_CD = 'USD'
+
+    GROUP BY
+        TRUNC(EFFECTIVE_DATE)
+),
+
+TC AS (
+    SELECT
+        F.FECHA,
+
+        MAX(T.EXCHANGE_RATE)
+        KEEP (
+            DENSE_RANK LAST
+            ORDER BY T.FECHA_TC
+        ) AS EXCHANGE_RATE,
+
+        MAX(T.FECHA_TC) AS FECHA_TC_APLICADO
+
+    FROM FECHAS_STOCK F
+
+    LEFT JOIN TC_BASE T
+        ON T.FECHA_TC <= F.FECHA
+
+    GROUP BY
+        F.FECHA
+),
+
+STOCK_DIARIO AS (
+    SELECT
+        TRUNC(F.AS_OF_DATE) AS FECHA,
+
+        /* STOCK EN SOLES */
+        SUM(
+            CASE
+                WHEN F.ISO_CURRENCY_CD = 'USD'
+                THEN
+                    NVL(F.CUR_BOOK_BAL,0)
+                    * TC.EXCHANGE_RATE
+
+                ELSE
+                    NVL(F.CUR_BOOK_BAL,0)
+            END
+        ) AS STOCK,
+
+        /* STOCK X TASA */
+        SUM(
+            CASE
+                WHEN F.ISO_CURRENCY_CD = 'USD'
+                THEN
+                    NVL(F.CUR_BOOK_BAL,0)
+                    * NVL(F.CUR_GROSS_RATE,0)
+                    * TC.EXCHANGE_RATE
+
+                ELSE
+                    NVL(F.CUR_BOOK_BAL,0)
+                    * NVL(F.CUR_GROSS_RATE,0)
+            END
+        ) AS STOCK_X_TASA,
+
+        /* CLIENTES */
+        COUNT(
+            DISTINCT
+            LPAD(
+                TRIM(CAST(F.CIF_KEY AS VARCHAR2(30))),
+                10,
+                '0'
+            )
+        ) AS CLIENTES_STOCK,
+
+        /* CREDITOS */
+        COUNT(
+            DISTINCT
+            CASE
+                WHEN F.ACCOUNT_NUMBER IS NOT NULL
+                THEN
+                    LPAD(
+                        TRIM(CAST(F.CIF_KEY AS VARCHAR2(30))),
+                        10,
+                        '0'
+                    )
+                    || '|'
+                    || TRIM(F.ACCOUNT_NUMBER)
+            END
+        ) AS CREDITOS_STOCK,
+
+        MAX(TC.EXCHANGE_RATE) AS TC_APLICADO,
+
+        MAX(TC.FECHA_TC_APLICADO) AS FECHA_TC_APLICADO,
+
+        /* CONTROL TC */
+        SUM(
+            CASE
+                WHEN F.ISO_CURRENCY_CD = 'USD'
+                 AND TC.EXCHANGE_RATE IS NULL
+                THEN 1
+                ELSE 0
+            END
+        ) AS REGISTROS_USD_SIN_TC
+
+    FROM FDM.FEM_SALDOS_DIARIOS F
+
+    CROSS JOIN PARAMETROS P
+
+    LEFT JOIN TC
+        ON TC.FECHA = TRUNC(F.AS_OF_DATE)
+
+    WHERE TRUNC(F.AS_OF_DATE)
+          BETWEEN P.FECHA_DESDE AND P.FECHA_HASTA_STOCK
+
+      AND F.COMMON_COA_ID IN (
+          204999999,
+          204019999,
+          1203029999,
+          204999903,
+          204999904,
+          204999905,
+          204999906,
+          204999907
+      )
+
+      AND SUBSTR(F.GL_ACCOUNT_ID,1,2) = '14'
+      AND F.ISO_CURRENCY_CD IN ('PSS','USD')
+      AND F.DATA_SOURCE IN ('HP','JC')
+
+    GROUP BY
+        TRUNC(F.AS_OF_DATE)
+),
+
+SNAPSHOTS AS (
+    SELECT
+        FECHA AS FECHA_SNAPSHOT,
+
+        LAG(FECHA) OVER (
+            ORDER BY FECHA
+        ) AS FECHA_SNAPSHOT_ANT,
+
+        STOCK AS STOCK_FINAL,
+
+        LAG(STOCK) OVER (
+            ORDER BY FECHA
+        ) AS STOCK_INICIAL,
+
+        STOCK_X_TASA AS STOCK_X_TASA_FINAL,
+
+        LAG(STOCK_X_TASA) OVER (
+            ORDER BY FECHA
+        ) AS STOCK_X_TASA_INICIAL,
+
+        CLIENTES_STOCK AS CLIENTES_FINAL,
+
+        LAG(CLIENTES_STOCK) OVER (
+            ORDER BY FECHA
+        ) AS CLIENTES_INICIAL,
+
+        CREDITOS_STOCK AS CREDITOS_FINAL,
+
+        LAG(CREDITOS_STOCK) OVER (
+            ORDER BY FECHA
+        ) AS CREDITOS_INICIAL,
+
+        TC_APLICADO,
+        FECHA_TC_APLICADO,
+        REGISTROS_USD_SIN_TC
+
+    FROM STOCK_DIARIO
+),
+
+DESEMBOLSOS_CREDITO_DIA AS (
+    SELECT
+        TRUNC(D.FECDESEMBOLSO) AS FECHA,
+
+        LPAD(
+            TRIM(CAST(D.CODUNICOCLI AS VARCHAR2(30))),
+            10,
+            '0'
+        ) AS CIF_KEY,
+
+        LPAD(
+            TRIM(CAST(D.NROCREDITO AS VARCHAR2(30))),
+            10,
+            '0'
+        ) AS NRO_CREDITO,
+
+        SUM(
+            NVL(D.MTODESEMBOLSADOSOL,0)
+        ) AS MONTO_DESEMBOLSADO,
+
+        SUM(
+            NVL(D.MTODESEMBOLSADOSOL,0)
+            * NVL(D.TASAINTERES,0)
+        ) AS MONTO_X_TASA
+
+    FROM DESEMBOLSOS_PPE_BUK_TDT D
+
+    CROSS JOIN PARAMETROS P
+
+    WHERE D.FECDESEMBOLSO >= P.FECHA_DESDE
+      AND D.FECDESEMBOLSO < P.FECHA_HASTA_COMPLETA + 1
+
+    GROUP BY
+        TRUNC(D.FECDESEMBOLSO),
+
+        LPAD(
+            TRIM(CAST(D.CODUNICOCLI AS VARCHAR2(30))),
+            10,
+            '0'
+        ),
+
+        LPAD(
+            TRIM(CAST(D.NROCREDITO AS VARCHAR2(30))),
+            10,
+            '0'
+        )
+),
+
+DESEMBOLSOS_INTERVALO AS (
+    SELECT
+        S.FECHA_SNAPSHOT,
+
+        SUM(
+            NVL(D.MONTO_DESEMBOLSADO,0)
+        ) AS DESEMBOLSOS_INTERVALO,
+
+        SUM(
+            NVL(D.MONTO_X_TASA,0)
+        ) AS DESEMBOLSOS_X_TASA,
+
+        COUNT(
+            DISTINCT
+            CASE
+                WHEN D.NRO_CREDITO IS NOT NULL
+                THEN
+                    D.CIF_KEY
+                    || '|'
+                    || D.NRO_CREDITO
+            END
+        ) AS OPERACIONES_DESEMBOLSO,
+
+        COUNT(
+            DISTINCT D.CIF_KEY
+        ) AS CLIENTES_DESEMBOLSO,
+
+        /* BIG TICKET */
+        SUM(
+            CASE
+                WHEN D.MONTO_DESEMBOLSADO >= 200000
+                THEN D.MONTO_DESEMBOLSADO
+                ELSE 0
+            END
+        ) AS DESEMBOLSOS_BIG,
+
+        COUNT(
+            DISTINCT
+            CASE
+                WHEN D.MONTO_DESEMBOLSADO >= 200000
+                THEN
+                    D.CIF_KEY
+                    || '|'
+                    || D.NRO_CREDITO
+            END
+        ) AS OPERACIONES_BIG,
+
+        /* SMALL TICKET */
+        SUM(
+            CASE
+                WHEN D.MONTO_DESEMBOLSADO > 0
+                 AND D.MONTO_DESEMBOLSADO < 200000
+                THEN D.MONTO_DESEMBOLSADO
+                ELSE 0
+            END
+        ) AS DESEMBOLSOS_SMALL,
+
+        COUNT(
+            DISTINCT
+            CASE
+                WHEN D.MONTO_DESEMBOLSADO > 0
+                 AND D.MONTO_DESEMBOLSADO < 200000
+                THEN
+                    D.CIF_KEY
+                    || '|'
+                    || D.NRO_CREDITO
+            END
+        ) AS OPERACIONES_SMALL
+
+    FROM SNAPSHOTS S
+
+    LEFT JOIN DESEMBOLSOS_CREDITO_DIA D
+        ON D.FECHA > S.FECHA_SNAPSHOT_ANT
+       AND D.FECHA <= S.FECHA_SNAPSHOT
+
+    WHERE S.FECHA_SNAPSHOT_ANT IS NOT NULL
+
+    GROUP BY
+        S.FECHA_SNAPSHOT
+),
+
+BASE_MOTOR AS (
+    SELECT
+        S.FECHA_SNAPSHOT,
+        S.FECHA_SNAPSHOT_ANT,
+
+        S.FECHA_SNAPSHOT
+        - S.FECHA_SNAPSHOT_ANT
+            AS DIAS_INTERVALO,
+
+        /* STOCK */
+        S.STOCK_INICIAL,
+        S.STOCK_FINAL,
+
+        S.STOCK_FINAL
+        - S.STOCK_INICIAL
+            AS VARIACION_STOCK,
+
+        /* DESEMBOLSOS */
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.DESEMBOLSOS_INTERVALO,0)
+            ELSE NULL
+        END AS DESEMBOLSOS_INTERVALO,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.DESEMBOLSOS_X_TASA,0)
+            ELSE NULL
+        END AS DESEMBOLSOS_X_TASA,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.OPERACIONES_DESEMBOLSO,0)
+            ELSE NULL
+        END AS OPERACIONES_DESEMBOLSO,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.CLIENTES_DESEMBOLSO,0)
+            ELSE NULL
+        END AS CLIENTES_DESEMBOLSO,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.DESEMBOLSOS_BIG,0)
+            ELSE NULL
+        END AS DESEMBOLSOS_BIG,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.DESEMBOLSOS_SMALL,0)
+            ELSE NULL
+        END AS DESEMBOLSOS_SMALL,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.OPERACIONES_BIG,0)
+            ELSE NULL
+        END AS OPERACIONES_BIG,
+
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN NVL(D.OPERACIONES_SMALL,0)
+            ELSE NULL
+        END AS OPERACIONES_SMALL,
+
+        /* MOVIMIENTO RESIDUAL */
+        CASE
+            WHEN S.FECHA_SNAPSHOT <= P.FECHA_HASTA_COMPLETA
+            THEN
+                S.STOCK_FINAL
+                - S.STOCK_INICIAL
+                - NVL(D.DESEMBOLSOS_INTERVALO,0)
+            ELSE NULL
+        END AS MOVIMIENTO_RESIDUAL,
+
+        S.CLIENTES_INICIAL,
+        S.CLIENTES_FINAL,
+
+        S.CREDITOS_INICIAL,
+        S.CREDITOS_FINAL,
+
+        S.STOCK_X_TASA_INICIAL,
+        S.STOCK_X_TASA_FINAL,
+
+        S.TC_APLICADO,
+        S.FECHA_TC_APLICADO,
+
+        S.REGISTROS_USD_SIN_TC,
+
+        P.FECHA_HASTA_COMPLETA
+
+    FROM SNAPSHOTS S
+
+    CROSS JOIN PARAMETROS P
+
+    LEFT JOIN DESEMBOLSOS_INTERVALO D
+        ON D.FECHA_SNAPSHOT = S.FECHA_SNAPSHOT
+
+    WHERE S.FECHA_SNAPSHOT_ANT IS NOT NULL
+),
+
+RESULTADO AS (
+    SELECT
+        B.*,
+
+        CASE
+            WHEN B.MOVIMIENTO_RESIDUAL IS NULL
+            THEN NULL
+
+            ELSE
+                B.STOCK_INICIAL
+                + B.DESEMBOLSOS_INTERVALO
+                + B.MOVIMIENTO_RESIDUAL
+
+        END AS STOCK_CALCULADO
+
+    FROM BASE_MOTOR B
+)
+
+SELECT
+    /* FECHAS */
+    FECHA_SNAPSHOT,
+
+    FECHA_SNAPSHOT_ANT,
+
+    DIAS_INTERVALO,
+
+    TO_CHAR(
+        FECHA_SNAPSHOT,
+        'DY',
+        'NLS_DATE_LANGUAGE=SPANISH'
+    ) AS DIA_SEMANA,
+
+    TO_NUMBER(
+        TO_CHAR(FECHA_SNAPSHOT,'DD')
+    ) AS DIA_MES,
+
+    TO_NUMBER(
+        TO_CHAR(FECHA_SNAPSHOT,'MM')
+    ) AS MES,
+
+    TO_NUMBER(
+        TO_CHAR(FECHA_SNAPSHOT,'YYYY')
+    ) AS ANIO,
+
+    LAST_DAY(FECHA_SNAPSHOT)
+    - FECHA_SNAPSHOT
+        AS DIAS_PARA_FIN_MES,
+
+    CASE
+        WHEN FECHA_SNAPSHOT = LAST_DAY(FECHA_SNAPSHOT)
+        THEN 1
+        ELSE 0
+    END AS ES_FIN_MES,
+
+    CASE
+        WHEN DIAS_INTERVALO > 1
+        THEN 1
+        ELSE 0
+    END AS ES_INTERVALO_MULTIDIA,
+
+    /* STOCK */
+    ROUND(
+        STOCK_INICIAL,
+        2
+    ) AS STOCK_INICIAL,
+
+    ROUND(
+        STOCK_FINAL,
+        2
+    ) AS STOCK_FINAL,
+
+    ROUND(
+        VARIACION_STOCK,
+        2
+    ) AS VARIACION_STOCK,
+
+    /* DESEMBOLSOS */
+    ROUND(
+        DESEMBOLSOS_INTERVALO,
+        2
+    ) AS DESEMBOLSOS_INTERVALO,
+
+    OPERACIONES_DESEMBOLSO,
+
+    CLIENTES_DESEMBOLSO,
+
+    ROUND(
+        DESEMBOLSOS_BIG,
+        2
+    ) AS DESEMBOLSOS_BIG,
+
+    ROUND(
+        DESEMBOLSOS_SMALL,
+        2
+    ) AS DESEMBOLSOS_SMALL,
+
+    OPERACIONES_BIG,
+
+    OPERACIONES_SMALL,
+
+    CASE
+        WHEN OPERACIONES_DESEMBOLSO IS NULL
+          OR OPERACIONES_DESEMBOLSO = 0
+        THEN NULL
+
+        ELSE
+            ROUND(
+                DESEMBOLSOS_INTERVALO
+                / OPERACIONES_DESEMBOLSO,
+                2
+            )
+
+    END AS TICKET_PROMEDIO,
+
+    CASE
+        WHEN DESEMBOLSOS_INTERVALO IS NULL
+          OR DESEMBOLSOS_INTERVALO = 0
+        THEN NULL
+
+        ELSE
+            ROUND(
+                (
+                    DESEMBOLSOS_X_TASA
+                    / DESEMBOLSOS_INTERVALO
+                ) / 100,
+                8
+            )
+
+    END AS TASA_DESEMBOLSO,
+
+    /* MOVIMIENTO RESIDUAL */
+    ROUND(
+        MOVIMIENTO_RESIDUAL,
+        2
+    ) AS MOVIMIENTO_RESIDUAL,
+
+    CASE
+        WHEN MOVIMIENTO_RESIDUAL IS NULL
+        THEN NULL
+
+        WHEN MOVIMIENTO_RESIDUAL < 0
+        THEN ROUND(MOVIMIENTO_RESIDUAL,2)
+
+        ELSE 0
+    END AS MOVIMIENTO_RESIDUAL_NEGATIVO,
+
+    CASE
+        WHEN MOVIMIENTO_RESIDUAL IS NULL
+        THEN NULL
+
+        WHEN MOVIMIENTO_RESIDUAL > 0
+        THEN ROUND(MOVIMIENTO_RESIDUAL,2)
+
+        ELSE 0
+    END AS MOVIMIENTO_RESIDUAL_POSITIVO,
+
+    /* RECONCILIACION */
+    ROUND(
+        STOCK_CALCULADO,
+        2
+    ) AS STOCK_CALCULADO,
+
+    CASE
+        WHEN STOCK_CALCULADO IS NULL
+        THEN NULL
+
+        ELSE
+            ROUND(
+                STOCK_FINAL
+                - STOCK_CALCULADO,
+                2
+            )
+
+    END AS ERROR_RECONCILIACION,
+
+    /* CLIENTES */
+    CLIENTES_INICIAL,
+
+    CLIENTES_FINAL,
+
+    CLIENTES_FINAL
+    - CLIENTES_INICIAL
+        AS VARIACION_CLIENTES,
+
+    /* CREDITOS */
+    CREDITOS_INICIAL,
+
+    CREDITOS_FINAL,
+
+    CREDITOS_FINAL
+    - CREDITOS_INICIAL
+        AS VARIACION_CREDITOS,
+
+    /* TASA STOCK */
+    CASE
+        WHEN STOCK_INICIAL IS NULL
+          OR STOCK_INICIAL = 0
+        THEN NULL
+
+        ELSE
+            ROUND(
+                (
+                    STOCK_X_TASA_INICIAL
+                    / STOCK_INICIAL
+                ) / 100,
+                8
+            )
+
+    END AS TASA_STOCK_INICIAL,
+
+    CASE
+        WHEN STOCK_FINAL IS NULL
+          OR STOCK_FINAL = 0
+        THEN NULL
+
+        ELSE
+            ROUND(
+                (
+                    STOCK_X_TASA_FINAL
+                    / STOCK_FINAL
+                ) / 100,
+                8
+            )
+
+    END AS TASA_STOCK_FINAL,
+
+    /* TIPO DE CAMBIO */
+    ROUND(
+        TC_APLICADO,
+        8
+    ) AS TC_APLICADO,
+
+    FECHA_TC_APLICADO,
+
+    FECHA_SNAPSHOT
+    - FECHA_TC_APLICADO
+        AS DIAS_ANTIGUEDAD_TC,
+
+    REGISTROS_USD_SIN_TC,
+
+    /* CONTROL DE CALIDAD */
+    CASE
+        WHEN FECHA_SNAPSHOT <= FECHA_HASTA_COMPLETA
+         AND REGISTROS_USD_SIN_TC = 0
+        THEN 1
+
+        ELSE 0
+    END AS ES_DATO_COMPLETO,
+
+    CASE
+        WHEN REGISTROS_USD_SIN_TC > 0
+        THEN 'ERROR_TIPO_CAMBIO'
+
+        WHEN FECHA_SNAPSHOT <= FECHA_HASTA_COMPLETA
+        THEN 'COMPLETO'
+
+        ELSE 'PENDIENTE_DESEMBOLSOS'
+
+    END AS ESTADO_CALIDAD,
+
+    CASE
+        WHEN FECHA_SNAPSHOT <= FECHA_HASTA_COMPLETA
+         AND REGISTROS_USD_SIN_TC = 0
+        THEN 1
+
+        ELSE 0
+    END AS USAR_ENTRENAMIENTO
+
+FROM RESULTADO
+
+ORDER BY
+    FECHA_SNAPSHOT
